@@ -1,47 +1,30 @@
--- MINI HUB - 100% AUTO-EXECUTE + LEFT CORNER + FULLY OPEN new spam
+-- MINI HUB - SCROLLING + ALL BUTTONS + ANTI RAGDOLL + SPAM TOOLS
 local player = game.Players.LocalPlayer
 local RS   = game:GetService("RunService")
 local UIS  = game:GetService("UserInputService")
 local Http = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 
--- =====================================================
--- 1. 100% AUTO-EXECUTE SAFE STARTUP (WORKS EVERY TIME) spam tool
--- =====================================================
 task.spawn(function()
     pcall(function()
-        -- Wait for critical services
         repeat task.wait() until player and player:FindFirstChild("PlayerGui") and Workspace
-        task.wait(0.3) -- Extra safety
+        task.wait(0.3)
 
-        -- =====================================================
-        -- 2. CONFIG SYSTEM
-        -- =====================================================
+        -- CONFIG
         local CONFIG_FILE = "MiniHub_Config.json"
         local CONFIG = { keybinds = {}, states = {} }
-
         local function loadConfig()
             if isfile and readfile and isfile(CONFIG_FILE) then
-                local ok, data = pcall(function()
-                    return Http:JSONDecode(readfile(CONFIG_FILE))
-                end)
+                local ok, data = pcall(function() return Http:JSONDecode(readfile(CONFIG_FILE)) end)
                 if ok and data then CONFIG = data end
             end
         end
-
         local function saveConfig()
-            if writefile then
-                pcall(function()
-                    writefile(CONFIG_FILE, Http:JSONEncode(CONFIG))
-                end)
-            end
+            if writefile then pcall(function() writefile(CONFIG_FILE, Http:JSONEncode(CONFIG)) end) end
         end
-
         loadConfig()
 
-        -- =====================================================
-        -- 3. GUI SETUP – LEFT CORNER, FULLY OPEN
-        -- =====================================================
+        -- GUI
         local gui = Instance.new("ScreenGui")
         gui.Name = "MiniHub"
         gui.ResetOnSpawn = false
@@ -49,16 +32,13 @@ task.spawn(function()
 
         local window = Instance.new("Frame")
         window.Size = UDim2.new(0, 280, 0, 600)
-        window.Position = UDim2.new(0, 10, 0.5, -300)  -- LEFT CORNER, CENTERED VERTICALLY
+        window.Position = UDim2.new(0, 10, 0.5, -300)
         window.BackgroundColor3 = Color3.fromRGB(25,25,25)
         window.Active = true
         window.Draggable = true
         window.ClipsDescendants = true
         window.Parent = gui
-
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 12)
-        corner.Parent = window
+        local corner = Instance.new("UICorner", window); corner.CornerRadius = UDim.new(0, 12)
 
         local title = Instance.new("TextButton")
         title.Size = UDim2.new(1, -10, 0, 30)
@@ -79,9 +59,7 @@ task.spawn(function()
         close.Font = Enum.Font.GothamBold
         close.TextSize = 16
         close.Parent = window
-        local closeCorner = Instance.new("UICorner")
-        closeCorner.CornerRadius = UDim.new(0, 6)
-        closeCorner.Parent = close
+        local closeCorner = Instance.new("UICorner", close); closeCorner.CornerRadius = UDim.new(0, 6)
 
         local saveBtn = Instance.new("TextButton")
         saveBtn.Size = UDim2.new(1, -20, 0, 35)
@@ -92,23 +70,34 @@ task.spawn(function()
         saveBtn.Font = Enum.Font.GothamBold
         saveBtn.TextSize = 14
         saveBtn.Parent = window
-        local saveCorner = Instance.new("UICorner")
-        saveCorner.CornerRadius = UDim.new(0, 8)
-        saveCorner.Parent = saveBtn
+        local saveCorner = Instance.new("UICorner", saveBtn); saveCorner.CornerRadius = UDim.new(0, 8)
 
-        local container = Instance.new("Frame")
-        container.Size = UDim2.new(1, -20, 1, -90)
-        container.Position = UDim2.new(0, 10, 0, 40)
-        container.BackgroundTransparency = 1
-        container.Visible = true  -- FULLY OPEN
-        container.Parent = window
+        -- SCROLLING CONTAINER
+        local scroll = Instance.new("ScrollingFrame")
+        scroll.Size = UDim2.new(1, -20, 1, -90)
+        scroll.Position = UDim2.new(0, 10, 0, 40)
+        scroll.BackgroundTransparency = 1
+        scroll.ScrollBarThickness = 6
+        scroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,100)
+        scroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Auto
+        scroll.Visible = true
+        scroll.Parent = window
 
-        -- Keep it open by default
+        local layout = Instance.new("UIListLayout")
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 8)
+        layout.Parent = scroll
+
+        -- Auto resize canvas
+        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+        end)
+
         local isOpen = true
         title.MouseButton1Click:Connect(function()
             isOpen = not isOpen
             title.Text = "MINI HUB " .. (isOpen and "Down Arrow" or "Right Arrow")
-            container.Visible = isOpen
+            scroll.Visible = isOpen
             saveBtn.Visible = isOpen
             window.Size = UDim2.new(0, 280, 0, isOpen and 600 or 40)
         end)
@@ -124,12 +113,9 @@ task.spawn(function()
             task.delay(1, function() saveBtn.Text = "SAVE CONFIG" end)
         end)
 
-        -- =====================================================
-        -- 4. INPUT + TOGGLE LOGIC
-        -- =====================================================
+        -- INPUT
         local bindingName, bindingKeyBox, buttons = nil, nil, {}
-
-        local inputConn = UIS.InputBegan:Connect(function(inp, gp)
+        UIS.InputBegan:Connect(function(inp, gp)
             if gp then return end
             local key = inp.KeyCode
             local keyName = key.Name
@@ -160,8 +146,7 @@ task.spawn(function()
                 if data == keyName then
                     local btnInfo = buttons[name]
                     if not btnInfo then continue end
-                    local wasOn = CONFIG.states[name] or false
-                    local newState = not wasOn
+                    local newState = not (CONFIG.states[name] or false)
                     CONFIG.states[name] = newState
                     btnInfo.btn.Text = name .. (newState and " [ON]" or " [OFF]")
                     btnInfo.btn.BackgroundColor3 = newState and btnInfo.on or btnInfo.off
@@ -171,18 +156,16 @@ task.spawn(function()
             end
         end)
 
-        -- =====================================================
-        -- 5. BUTTON FACTORY
-        -- =====================================================
+        -- BUTTON FACTORY
         local OFF_COLOR = Color3.fromRGB(30,30,30)
         local ON_COLOR  = Color3.fromRGB(0,170,255)
 
-        local function makeBtn(name, yPos, callback)
+        local function makeBtn(name, order, callback)
             local frame = Instance.new("Frame")
             frame.Size = UDim2.new(1,0,0,45)
-            frame.Position = UDim2.new(0,0,0,yPos)
             frame.BackgroundTransparency = 1
-            frame.Parent = container
+            frame.LayoutOrder = order
+            frame.Parent = scroll
 
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(0,190,1,0)
@@ -192,9 +175,7 @@ task.spawn(function()
             btn.Font = Enum.Font.GothamBold
             btn.TextSize = 15
             btn.Parent = frame
-            local btnCorner = Instance.new("UICorner")
-            btnCorner.CornerRadius = UDim.new(0, 10)
-            btnCorner.Parent = btn
+            local btnCorner = Instance.new("UICorner", btn); btnCorner.CornerRadius = UDim.new(0, 10)
 
             local keyBox = Instance.new("TextButton")
             keyBox.Size = UDim2.new(0,60,1,0)
@@ -205,9 +186,7 @@ task.spawn(function()
             keyBox.TextSize = 13
             keyBox.Text = CONFIG.keybinds[name] or "NONE"
             keyBox.Parent = frame
-            local keyCorner = Instance.new("UICorner")
-            keyCorner.CornerRadius = UDim.new(0, 8)
-            keyCorner.Parent = keyBox
+            local keyCorner = Instance.new("UICorner", keyBox); keyCorner.CornerRadius = UDim.new(0, 8)
 
             keyBox.MouseButton1Click:Connect(function()
                 bindingName = name
@@ -511,6 +490,117 @@ task.spawn(function()
                 task.wait(1); stripAll()
             end)
         end)
+
+makeBtn("Anti Ragdoll", 1, function(state)
+    -- Cleanup
+    if _G.afRemoteConn then _G.afRemoteConn:Disconnect() end
+    if _G.afStateConn then _G.afStateConn:Disconnect() end
+    if _G.afInputConn then _G.afInputConn:Disconnect() end
+    if _G.afVelocity then _G.afVelocity:Destroy() end
+    _G.afRemoteConn, _G.afStateConn, _G.afInputConn, _G.afVelocity = nil, nil, nil, nil
+
+    -- Restore physics
+    if not state and _G.originalPhysicalProps then
+        for part, props in pairs(_G.originalPhysicalProps) do
+            if part and part.Parent then
+                pcall(function() part.CustomPhysicalProperties = props end)
+            end
+        end
+        _G.originalPhysicalProps = nil
+    end
+
+    if not state then return end
+
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+    local torso = char:FindFirstChild("UpperTorso") or char:WaitForChild("HumanoidRootPart")
+    local RagdollRemote = game.ReplicatedStorage.Packages.Ragdoll.Ragdoll
+
+    -- Save physics
+    if not _G.originalPhysicalProps then
+        _G.originalPhysicalProps = {}
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                _G.originalPhysicalProps[part] = part.CustomPhysicalProperties
+            end
+        end
+    end
+
+    -- Dense physics (anti-fling)
+    for _, part in ipairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
+        end
+    end
+
+    -- Lightweight BodyVelocity for movement + float
+    local function setupVelocity()
+        if _G.afVelocity then _G.afVelocity:Destroy() end
+        _G.afVelocity = Instance.new("BodyVelocity")
+        _G.afVelocity.MaxForce = Vector3.new(10000, 5000, 10000)
+        _G.afVelocity.Velocity = Vector3.zero
+        _G.afVelocity.Parent = torso
+    end
+
+    -- WASD movement
+    local function handleMovement()
+        if _G.afInputConn then _G.afInputConn:Disconnect() end
+        _G.afInputConn = game:GetService("UserInputService").InputChanged:Connect(function(input, gp)
+            if gp or not _G.afVelocity or not hum or hum:GetState() ~= Enum.HumanoidStateType.Ragdoll then return end
+            local moveDir = Vector3.zero
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                if input.KeyCode == Enum.KeyCode.W then moveDir += Vector3.new(0, 0, -1) end
+                if input.KeyCode == Enum.KeyCode.S then moveDir += Vector3.new(0, 0, 1) end
+                if input.KeyCode == Enum.KeyCode.A then moveDir += Vector3.new(-1, 0, 0) end
+                if input.KeyCode == Enum.KeyCode.D then moveDir += Vector3.new(1, 0, 0) end
+            end
+            -- Minimal float + movement
+            _G.afVelocity.Velocity = (moveDir * 20) + Vector3.new(0, 2, 0) -- Tiny upward force
+        end)
+    end
+
+    -- Start on ragdoll
+    _G.afRemoteConn = RagdollRemote.OnClientEvent:Connect(function(...)
+        local args = {...}
+        if args[2] == "manualD" or args[2] == "manualM" then
+            task.spawn(function()
+                task.wait()
+                if hum and hum.Parent then
+                    hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
+                    setupVelocity()
+                    handleMovement()
+                end
+            end)
+        end
+    end)
+
+    -- Ensure movement during ragdoll state
+    _G.afStateConn = hum.StateChanged:Connect(function(_, new)
+        if new == Enum.HumanoidStateType.Ragdoll then
+            setupVelocity()
+            handleMovement()
+        elseif new == Enum.HumanoidStateType.Running or new == Enum.HumanoidStateType.GettingUp then
+            if _G.afVelocity then _G.afVelocity:Destroy(); _G.afVelocity = nil end
+            if _G.afInputConn then _G.afInputConn:Disconnect(); _G.afInputConn = nil end
+        end
+    end)
+
+    -- Reapply on character respawn
+    player.CharacterAdded:Connect(function(newChar)
+        char = newChar
+        hum = char:WaitForChild("Humanoid")
+        torso = char:FindFirstChild("UpperTorso") or char:WaitForChild("HumanoidRootPart")
+        if state then
+            for _, part in ipairs(char:GetChildren()) do
+                if part:IsA("BasePart") then
+                    _G.originalPhysicalProps[part] = part.CustomPhysicalProperties
+                    part.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
+                end
+            end
+        end
+    end)
+end)
+
 
 -- SPAM TOOLS BUTTON – BOOGIE BOMB ON BRAINROT + STOLEN (SPECIAL ONLY)
 local player = game.Players.LocalPlayer
