@@ -324,24 +324,35 @@ task.spawn(function()
         -- =====================================================
         -- 7. OTHER FEATURES
         -- =====================================================
-        makeBtn("Auto Kick",0,function(state)
-            if _G.brainrotConn then _G.brainrotConn:Disconnect(); _G.brainrotConn=nil end
-            if not state then return end
-            local pg = player:WaitForChild("PlayerGui")
-            local notif = pg:WaitForChild("Notification",10)
-            if not notif then return end
-            local folder = notif:FindFirstChild("Notification")
-            if not folder then return end
-            _G.brainrotConn = folder.ChildAdded:Connect(function(c)
-                if c:IsA("TextLabel") then
-                    task.wait(0.05)
-                    local t = c.Text or ""
-                    if t:match("^You stole") and t:find("<stroke") and t:find("<font") then
-                        player:Kick("Brainrot has been stolen.")
-                    end
-                end
-            end)
-        end)
+ makeBtn("Auto Kick", 60, function(state)
+    -- SAFE: Manual FindFirstChild checks
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local notifOuter = playerGui:FindFirstChild("Notification")
+    if not notifOuter then return end
+
+    local notifFolder = notifOuter:FindFirstChild("Notification")
+    if not notifFolder then return end
+
+    -- Clean old connection
+    if _G.brainrotConn then
+        _G.brainrotConn:Disconnect()
+        _G.brainrotConn = nil
+    end
+
+    if not state then return end
+
+    _G.brainrotConn = notifFolder.ChildAdded:Connect(function(child)
+        if child:IsA("TextLabel") then
+            task.wait(0.05)
+            local text = child.Text or ""
+            if text:match("^You stole") and text:find("<stroke") and text:find("<font") then
+                player:Kick("Brainrot has been stolen.")
+            end
+        end
+    end)
+end)
 
         makeBtn("Jump Boost",55,function(state)
             if _G.jumpBoostConn then _G.jumpBoostConn:Disconnect(); _G.jumpBoostConn=nil end
