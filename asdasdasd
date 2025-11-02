@@ -367,39 +367,55 @@ end)
             end)
         end)
 
-        makeBtn("Glitched Slap",165,function(state)
-            for _,v in pairs({"Conn","CharConn","BackpackAddedConn","BackpackRemovedConn"}) do
-                if _G["keepGlitched"..v] then _G["keepGlitched"..v]:Disconnect(); _G["keepGlitched"..v]=nil end
-            end
-            if not state then
-                local char = player.Character
-                if char then
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum and char:FindFirstChild("Glitched Slap") then hum:UnequipTools() end
-                end
-                return
-            end
-            local function eq()
-                local char = player.Character local bp = player:FindFirstChild("Backpack")
-                if not char or not bp then return end
-                local hum = char:FindFirstChildOfClass("Humanoid") if not hum then return end
-                local tool = bp:FindFirstChild("Glitched Slap") or char:FindFirstChild("Glitched Slap")
-                if tool and tool.Parent~=char then
-                    task.defer(function() pcall(function() tool.Parent=char hum:EquipTool(tool) end) end)
-                end
-            end
-            local last=0
-            _G.keepGlitchedConn = RS.Heartbeat:Connect(function()
-                if tick()-last>=0.5 then last=tick() eq() end
-            end)
-            _G.keepGlitchedCharConn = player.CharacterAdded:Connect(function() task.wait(1) eq() end)
-            local bp = player:FindFirstChild("Backpack")
-            if bp then
-                _G.keepGlitchedBackpackAddedConn = bp.ChildAdded:Connect(eq)
-                _G.keepGlitchedBackpackRemovedConn = bp.ChildRemoved:Connect(eq)
-            end
-            eq()
-        end)
+ makeBtn("Glitched Slap",165,function(state)
+    -- === FULL CLEANUP ===
+    for _, v in pairs({"Conn","CharConn","BpAdd","BpRem"}) do
+        if _G["gs"..v] then _G["gs"..v]:Disconnect(); _G["gs"..v]=nil end
+    end
+
+    -- === OFF: UNEQUIP + STOP ===
+    if not state then
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:UnequipTools() end
+        end
+        return
+    end
+
+    -- === ON: ALWAYS EQUIPPED ===
+    local function equip()
+        local char = player.Character
+        local bp = player:FindFirstChild("Backpack")
+        if not char or not bp then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        local tool = bp:FindFirstChild("Glitched Slap") or char:FindFirstChild("Glitched Slap")
+        if tool and tool.Parent ~= char then
+            hum:EquipTool(tool)
+        end
+    end
+
+    _G.gsConn = RS.Heartbeat:Connect(function()
+        if tick() - (_G.gsLast or 0) >= 0.4 then
+            _G.gsLast = tick()
+            equip()
+        end
+    end)
+
+    _G.gsCharConn = player.CharacterAdded:Connect(function()
+        task.wait(0.6)
+        equip()
+    end)
+
+    local bp = player:FindFirstChild("Backpack")
+    if bp then
+        _G.gsBpAdd = bp.ChildAdded:Connect(equip)
+        _G.gsBpRem = bp.ChildRemoved:Connect(equip)
+    end
+
+    equip()
+end)
 
         makeBtn("Invis Cam",220,function(state)
             player.DevCameraOcclusionMode = state and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom
@@ -614,124 +630,131 @@ end)
 
 
 -- SPAM TOOLS BUTTON – BOOGIE BOMB ON BRAINROT + STOLEN (SPECIAL ONLY)
+-- === SPAM TOOLS – BIGGER BUTTON + KEYBIND + CONFIG ===
 local player = game.Players.LocalPlayer
 local RS = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
 
-task.spawn(function()
-    pcall(function()
-        repeat task.wait() until player and player:FindFirstChild("PlayerGui") and Workspace
-        task.wait(0.3)
-
-        local REUseItem = ReplicatedStorage.Packages.Net["RE/UseItem"]
-
-        local SEQUENCE = {
-            {tool = "BeeHive",          args = {}},
-            {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
-            {tool = "Medusa's Head",    args = {}},
-            {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
-            {tool = "All Seeing Sentry",args = {}},
-            {tool = "Taser Gun",        args = {"UpperTorso"}},
-            {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
-            {tool = "Bee Launcher",     args = {"player"}}
-        }
-
-        -- === GUI ===
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "SpamToolsBtn"
-        gui.ResetOnSpawn = false
-        gui.Parent = player.PlayerGui
-
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 160, 0, 40)
-        btn.Position = UDim2.new(0, 10, 0, 10)
-        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        btn.Text = "Spam Tools [OFF]"
-        btn.TextColor3 = Color3.new(1,1,1)
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 14
-        btn.Active = true
-        btn.Draggable = true
-        btn.Parent = gui
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
-        -- === STATE ===
-        local enabled = false
-        local spamConn = nil
-        local lastSpam = 0
-        local lastSentry = 0
-        local _G_SpamTools = { promptConns = {} }
-        local currentTarget = nil
-        local targetHighlight = nil
-        local lastBoogie = 0
-
-        -- === STOP ===
-        local function stopSpam()
-            enabled = false
-            btn.Text = "Spam Tools [OFF]"
-            btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            if spamConn then spamConn:Disconnect(); spamConn = nil end
-            for _, conn in pairs(_G_SpamTools.promptConns) do
-                if conn.Connected then conn:Disconnect() end
+makeBtn("Spam Tools", 3, function(state)
+    -- === CLEANUP ===
+    if _G.SpamTools then
+        if _G.SpamTools.conn then _G.SpamTools.conn:Disconnect() end
+        if _G.SpamTools.promptConns then
+            for _, c in pairs(_G.SpamTools.promptConns) do
+                if c.Connected then c:Disconnect() end
             end
-            _G_SpamTools.promptConns = {}
-            if targetHighlight then targetHighlight:Destroy(); targetHighlight = nil end
-            currentTarget = nil
         end
+        if _G.SpamTools.highlight then _G.SpamTools.highlight:Destroy() end
+        _G.SpamTools = nil
+    end
 
-        -- === PROMPT LOGIC ===
-        local function onPromptTriggered(plr)
-            if plr == player then stopSpam() end
-        end
+    if not state then return end
 
-        local function watchPrompts()
-            _G_SpamTools.promptConns = {}
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    table.insert(_G_SpamTools.promptConns, obj.Triggered:Connect(onPromptTriggered))
-                end
-            end
-            table.insert(_G_SpamTools.promptConns, Workspace.DescendantAdded:Connect(function(obj)
-                if obj:IsA("ProximityPrompt") then
-                    table.insert(_G_SpamTools.promptConns, obj.Triggered:Connect(onPromptTriggered))
-                end
-            end))
-        end
+    local REUseItem = ReplicatedStorage.Packages.Net["RE/UseItem"]
+    local SEQUENCE = {
+        {tool = "BeeHive",          args = {}},
+        {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
+        {tool = "Medusa's Head",    args = {}},
+        {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
+        {tool = "All Seeing Sentry",args = {}},
+        {tool = "Taser Gun",        args = {"UpperTorso"}},
+        {tool = "Laser Cape",       args = {"position", "UpperTorso"}},
+        {tool = "Bee Launcher",     args = {"player"}}
+    }
 
-        -- === HIGHLIGHT TARGET ===
-        local function highlightTarget(target)
-            if targetHighlight then targetHighlight:Destroy() end
-            if not target or not target.Character then return end
-            targetHighlight = Instance.new("Highlight")
-            targetHighlight.Adornee = target.Character
-            targetHighlight.FillColor = Color3.fromRGB(255, 0, 0)
-            targetHighlight.OutlineColor = Color3.fromRGB(255, 100, 100)
-            targetHighlight.FillTransparency = 0.5
-            targetHighlight.OutlineTransparency = 0
-            targetHighlight.Parent = gui
-        end
+    _G.SpamTools = {
+        enabled = true,
+        lastSpam = 0,
+        lastSentry = 0,
+        lastBoogie = 0,
+        promptConns = {},
+        currentTarget = nil,
+        highlight = nil
+    }
 
-        -- === CHECK BRAINROT ANIMATION ===
-        local function hasBrainrotAnimation()
-            for _, p in Players:GetPlayers() do
-                if p ~= player and p.Character then
-                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if hum and hum:FindFirstChild("Animator") then
-                        for _, track in hum.Animator:GetPlayingAnimationTracks() do
-                            if track.Animation.AnimationId == "rbxassetid://71186871415348" then
-                                return p
-                            end
+    -- === HIGHLIGHT TARGET ===
+    local function highlightTarget(target)
+        if _G.SpamTools.highlight then _G.SpamTools.highlight:Destroy() end
+        if not target or not target.Character then return end
+        _G.SpamTools.highlight = Instance.new("Highlight")
+        _G.SpamTools.highlight.Adornee = target.Character
+        _G.SpamTools.highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        _G.SpamTools.highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+        _G.SpamTools.highlight.FillTransparency = 0.5
+        _G.SpamTools.highlight.OutlineTransparency = 0
+        _G.SpamTools.highlight.Parent = player.PlayerGui
+    end
+
+    -- === BRAINROT ANIMATION CHECK ===
+    local function hasBrainrotAnimation()
+        for _, p in Players:GetPlayers() do
+            if p ~= player and p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum:FindFirstChild("Animator") then
+                    for _, track in hum.Animator:GetPlayingAnimationTracks() do
+                        if track.Animation.AnimationId == "rbxassetid://71186871415348" then
+                            return p
                         end
                     end
                 end
             end
-            return nil
+        end
+        return nil
+    end
+
+    -- === STOLEN VISIBLE CHECK ===
+    local function hasStolenVisible()
+        for _, model in Workspace:GetChildren() do
+            if model:FindFirstChild("RootPart") then
+                local att = model.RootPart:FindFirstChild("Attachment")
+                if att then
+                    local oh = att:FindFirstChild("AnimalOverhead")
+                    if oh then
+                        local stolen = oh:FindFirstChild("Stolen")
+                        if stolen and stolen:IsA("TextLabel") and stolen.Visible then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+        return false
+    end
+
+    -- === BOOGIE BOMB (SPECIAL) ===
+    local function useBoogieBomb()
+        if tick() - _G.SpamTools.lastBoogie < 1.5 then return end
+        local bp = player:FindFirstChild("Backpack")
+        local char = player.Character
+        if not bp or not char then return end
+
+        local tool = bp:FindFirstChild("Boogie Bomb") or char:FindFirstChild("Boogie Bomb")
+        if not tool then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+
+        hum:EquipTool(tool)
+        task.wait(0.15)
+        REUseItem:FireServer()
+        task.wait(0.1)
+        hum:UnequipTools()
+        _G.SpamTools.lastBoogie = tick()
+    end
+
+    -- === GET TARGET ===
+    local function getTarget()
+        local animPlayer = hasBrainrotAnimation()
+        if animPlayer then
+            _G.SpamTools.currentTarget = animPlayer
+            highlightTarget(animPlayer)
+            return animPlayer
         end
 
-        -- === CHECK STOLEN VISIBLE ===
-        local function hasStolenVisible()
+        if hasStolenVisible() then
             for _, model in Workspace:GetChildren() do
                 if model:FindFirstChild("RootPart") then
                     local att = model.RootPart:FindFirstChild("Attachment")
@@ -739,237 +762,212 @@ task.spawn(function()
                         local oh = att:FindFirstChild("AnimalOverhead")
                         if oh then
                             local stolen = oh:FindFirstChild("Stolen")
-                            if stolen and stolen:IsA("TextLabel") and stolen.Visible then
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-            return false
-        end
-
-        -- === USE BOOGIE BOMB (SPECIAL ONLY) ===
-        local function useBoogieBomb()
-            if tick() - lastBoogie < 1.5 then return end  -- Cooldown
-            local bp = player:FindFirstChild("Backpack")
-            local char = player.Character
-            if not bp or not char then return end
-
-            local tool = bp:FindFirstChild("Boogie Bomb") or char:FindFirstChild("Boogie Bomb")
-            if not tool then return end
-
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-
-            hum:EquipTool(tool)
-            task.wait(0.15)
-            REUseItem:FireServer()  -- 0-byte packet
-            task.wait(0.1)
-            hum:UnequipTools()
-            lastBoogie = tick()
-        end
-
-        -- === GET TARGET ===
-        local function getTarget()
-            local animPlayer = hasBrainrotAnimation()
-            if animPlayer then
-                currentTarget = animPlayer
-                highlightTarget(animPlayer)
-                return animPlayer
-            end
-
-            if hasStolenVisible() then
-                local stolenPlayer
-                for _, model in Workspace:GetChildren() do
-                    if model:FindFirstChild("RootPart") then
-                        local att = model.RootPart:FindFirstChild("Attachment")
-                        if att then
-                            local oh = att:FindFirstChild("AnimalOverhead")
-                            if oh then
-                                local stolen = oh:FindFirstChild("Stolen")
-                                if stolen and stolen.Visible then
-                                    local pos = model.RootPart.Position
-                                    local best, bestD = nil, math.huge
-                                    for _, p in Players:GetPlayers() do
-                                        if p ~= player and p.Character then
-                                            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                                            if hrp then
-                                                local d = (hrp.Position - pos).Magnitude
-                                                if d < bestD and d < 15 then
-                                                    bestD = d
-                                                    best = p
-                                                end
+                            if stolen and stolen.Visible then
+                                local pos = model.RootPart.Position
+                                local best, bestD = nil, math.huge
+                                for _, p in Players:GetPlayers() do
+                                    if p ~= player and p.Character then
+                                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                                        if hrp then
+                                            local d = (hrp.Position - pos).Magnitude
+                                            if d < bestD and d < 15 then
+                                                bestD = d
+                                                best = p
                                             end
                                         end
                                     end
-                                    if best then
-                                        currentTarget = best
-                                        highlightTarget(best)
-                                        return best
-                                    end
+                                end
+                                if best then
+                                    _G.SpamTools.currentTarget = best
+                                    highlightTarget(best)
+                                    return best
                                 end
                             end
                         end
                     end
                 end
             end
+        end
 
-            local char = player.Character
-            if not char then return end
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if not hrp then return end
-            local best, bestD = nil, math.huge
-            for _, p in Players:GetPlayers() do
-                if p ~= player and p.Character then
-                    local tHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                    if tHRP then
-                        local d = (hrp.Position - tHRP.Position).Magnitude
-                        if d < bestD then bestD = d; best = p end
+        local char = player.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local best, bestD = nil, math.huge
+        for _, p in Players:GetPlayers() do
+            if p ~= player and p.Character then
+                local tHRP = p.Character:FindFirstChild("HumanoidRootPart")
+                if tHRP then
+                    local d = (hrp.Position - tHRP.Position).Magnitude
+                    if d < bestD then bestD = d; best = p end
+                end
+            end
+        end
+        if best and best ~= _G.SpamTools.currentTarget then
+            _G.SpamTools.currentTarget = best
+            highlightTarget(best)
+        end
+        return _G.SpamTools.currentTarget
+    end
+
+    -- === 9 STUDS CHECK ===
+    local function isPlayerInRange()
+        local char = player.Character
+        if not char then return false end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return false end
+        for _, p in Players:GetPlayers() do
+            if p ~= player and p.Character then
+                local tHRP = p.Character:FindFirstChild("HumanoidRootPart")
+                if tHRP then
+                    if (hrp.Position - tHRP.Position).Magnitude <= 9 then
+                        return true
                     end
                 end
             end
-            if best and best ~= currentTarget then
-                currentTarget = best
-                highlightTarget(best)
-            end
-            return currentTarget
         end
+        return false
+    end
 
-        -- === 9 STUDS CHECK ===
-        local function isPlayerInRange()
-            local char = player.Character
-            if not char then return false end
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if not hrp then return false end
-            for _, p in Players:GetPlayers() do
-                if p ~= player and p.Character then
-                    local tHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                    if tHRP then
-                        if (hrp.Position - tHRP.Position).Magnitude <= 9 then
-                            return true
-                        end
-                    end
-                end
-            end
-            return false
-        end
+    -- === USE TOOL ===
+    local function useTool(toolName, args)
+        local bp = player:FindFirstChild("Backpack")
+        local char = player.Character
+        if not bp or not char then return end
 
-        -- === USE TOOL ===
-        local function useTool(toolName, args)
-            local bp = player:FindFirstChild("Backpack")
-            local char = player.Character
-            if not bp or not char then return end
+        local tool = bp:FindFirstChild(toolName) or char:FindFirstChild(toolName)
+        if not tool then return end
 
-            local tool = bp:FindFirstChild(toolName) or char:FindFirstChild(toolName)
-            if not tool then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
 
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
+        if toolName == "Medusa's Head" and not isPlayerInRange() then return end
 
-            if toolName == "Medusa's Head" and not isPlayerInRange() then return end
-
-            hum:EquipTool(tool)
-            if toolName == "Bee Launcher" then
-                task.wait(0.5)
-            else
-                task.wait(0.12)
-            end
-
-            local target = getTarget()
-            if not target or not target.Character then 
-                hum:UnequipTools()
-                return 
-            end
-            local ut = target.Character:FindFirstChild("UpperTorso")
-            if not ut then 
-                hum:UnequipTools()
-                return 
-            end
-            local pos = ut.Position
-
-            local fireArgs = {}
-            for _, a in args do
-                if a == "position" then table.insert(fireArgs, Vector3.new(pos.X, pos.Y, pos.Z))
-                elseif a == "UpperTorso" then table.insert(fireArgs, ut)
-                elseif a == "player" then table.insert(fireArgs, target)
-                end
-            end
-
-            if #fireArgs > 0 then
-                REUseItem:FireServer(unpack(fireArgs))
-            else
-                REUseItem:FireServer()
-            end
-
-            task.wait(0.12)
-            hum:UnequipTools()
-            task.wait(0.1)
-        end
-
-        -- === SENTRY 30s ===
-        local function startSentryCleanup()
-            Workspace.DescendantAdded:Connect(function(obj)
-                if not enabled then return end
-                if obj:IsA("BasePart") and obj.Name:match("^Sentry_") then
-                    if tick() - lastSentry >= 30 then
-                        lastSentry = tick()
-                        task.defer(obj.Destroy, obj)
-                    end
-                end
-            end)
-        end
-
-        -- === SPAM LOOP WITH BOOGIE BOMB ===
-        local function startSpam()
-            spamConn = RS.Heartbeat:Connect(function()
-                if not enabled then return end
-
-                -- === BOOGIE BOMB SPECIAL CHECK ===
-                local animPlayer = hasBrainrotAnimation()
-                local stolenVisible = hasStolenVisible()
-                if animPlayer or stolenVisible then
-                    useBoogieBomb()
-                end
-
-                if tick() - lastSpam >= 1.0 then
-                    lastSpam = tick()
-                    task.spawn(function()
-                        for _, step in SEQUENCE do
-                            if not enabled then break end
-                            useTool(step.tool, step.args)
-                        end
-                    end)
-                end
-            end)
-        end
-
-        -- === TOGGLE ===
-        btn.MouseButton1Click:Connect(function()
-            enabled = not enabled
-            btn.Text = "Spam Tools " .. (enabled and "[ON]" or "[OFF]")
-            btn.BackgroundColor3 = enabled and Color3.fromRGB(255, 0, 100) or Color3.fromRGB(30, 30, 30)
-
-            if enabled then
-                watchPrompts()
-                startSentryCleanup()
-                startSpam()
-            else
-                stopSpam()
-            end
-        end)
-
-        -- === RESPAWN ===
-        player.CharacterAdded:Connect(function()
+        hum:EquipTool(tool)
+        if toolName == "Bee Launcher" then
             task.wait(0.5)
-            if enabled then
-                watchPrompts()
-                startSentryCleanup()
+        else
+            task.wait(0.12)
+        end
+
+        local target = getTarget()
+        if not target or not target.Character then 
+            hum:UnequipTools()
+            return 
+        end
+        local ut = target.Character:FindFirstChild("UpperTorso")
+        if not ut then 
+            hum:UnequipTools()
+            return 
+        end
+        local pos = ut.Position
+
+        local fireArgs = {}
+        for _, a in args do
+            if a == "position" then table.insert(fireArgs, Vector3.new(pos.X, pos.Y, pos.Z))
+            elseif a == "UpperTorso" then table.insert(fireArgs, ut)
+            elseif a == "player" then table.insert(fireArgs, target)
+            end
+        end
+
+        if #fireArgs > 0 then
+            REUseItem:FireServer(unpack(fireArgs))
+        else
+            REUseItem:FireServer()
+        end
+
+        task.wait(0.12)
+        hum:UnequipTools()
+        task.wait(0.1)
+    end
+
+    -- === SENTRY CLEANUP ===
+    local function startSentryCleanup()
+        Workspace.DescendantAdded:Connect(function(obj)
+            if not _G.SpamTools.enabled then return end
+            if obj:IsA("BasePart") and obj.Name:match("^Sentry_") then
+                if tick() - _G.SpamTools.lastSentry >= 30 then
+                    _G.SpamTools.lastSentry = tick()
+                    task.defer(obj.Destroy, obj)
+                end
             end
         end)
+    end
 
-        print("SPAM TOOLS – BOOGIE BOMB ON BRAINROT/STOLEN – FINAL")
+    -- === PROMPT WATCHER ===
+    local function watchPrompts()
+        _G.SpamTools.promptConns = {}
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                table.insert(_G.SpamTools.promptConns, obj.Triggered:Connect(function(plr)
+                    if plr == player then
+                        _G.SpamTools.enabled = false
+                        CONFIG.states["Spam Tools"] = false
+                        buttons["Spam Tools"].btn.Text = "Spam Tools [OFF]"
+                        buttons["Spam Tools"].btn.BackgroundColor3 = buttons["Spam Tools"].off
+                        saveConfig()
+                    end
+                end))
+            end
+        end
+        table.insert(_G.SpamTools.promptConns, Workspace.DescendantAdded:Connect(function(obj)
+            if obj:IsA("ProximityPrompt") then
+                table.insert(_G.SpamTools.promptConns, obj.Triggered:Connect(function(plr)
+                    if plr == player then
+                        _G.SpamTools.enabled = false
+                        CONFIG.states["Spam Tools"] = false
+                        buttons["Spam Tools"].btn.Text = "Spam Tools [OFF]"
+                        buttons["Spam Tools"].btn.BackgroundColor3 = buttons["Spam Tools"].off
+                        saveConfig()
+                    end
+                end))
+            end
+        end))
+    end
+
+    -- === SPAM LOOP ===
+    local function startSpam()
+        _G.SpamTools.conn = RS.Heartbeat:Connect(function()
+            if not _G.SpamTools.enabled then return end
+
+            local animPlayer = hasBrainrotAnimation()
+            local stolenVisible = hasStolenVisible()
+            if animPlayer or stolenVisible then
+                useBoogieBomb()
+            end
+
+            if tick() - _G.SpamTools.lastSpam >= 1.0 then
+                _G.SpamTools.lastSpam = tick()
+                task.spawn(function()
+                    for _, step in SEQUENCE do
+                        if not _G.SpamTools.enabled then break end
+                        useTool(step.tool, step.args)
+                    end
+                end)
+            end
+        end)
+    end
+
+    -- === START EVERYTHING ===
+    watchPrompts()
+    startSentryCleanup()
+    startSpam()
+
+    -- === RESPAWN ===
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if _G.SpamTools and _G.SpamTools.enabled then
+            watchPrompts()
+        end
     end)
+end)
+
+-- === OVERRIDE BUTTON SIZE FOR SPAM TOOLS (BIGGER) ===
+task.spawn(function()
+    repeat task.wait() until buttons["Spam Tools"]
+    local frame = buttons["Spam Tools"].btn.Parent
+    frame.Size = UDim2.new(1, 0, 0, 50)  -- Bigger height
+    buttons["Spam Tools"].btn.Size = UDim2.new(0, 200, 1, 0)  -- Wider button
 end)
 
         -- =====================================================
