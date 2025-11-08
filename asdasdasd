@@ -321,6 +321,79 @@ task.spawn(function()
             end))
         end)
 
+
+makeBtn("Anti Bee", 160, function(state)
+    local Lighting = game:GetService("Lighting")
+    local UIS = game:GetService("UserInputService")
+    local Camera = workspace.CurrentCamera
+    local RS = game:GetService("RunService")
+
+    local function deleteBeeEffects()
+        for _, name in ipairs({"BeeBlur", "ColorCorrection", "ColorCCorrection"}) do
+            local obj = Lighting:FindFirstChild(name)
+            if obj then obj:Destroy() end
+        end
+    end
+
+    if _G.antiBeeConn then
+        _G.antiBeeConn:Disconnect()
+        _G.antiBeeConn = nil
+    end
+    if _G.reverseConn then
+        _G.reverseConn:Disconnect()
+        _G.reverseConn = nil
+    end
+    if _G.fovWatcher then
+        _G.fovWatcher:Disconnect()
+        _G.fovWatcher = nil
+    end
+
+    if not state then return end
+
+    -- Delete effects instantly and keep deleting new ones
+    deleteBeeEffects()
+    _G.antiBeeConn = Lighting.DescendantAdded:Connect(function(obj)
+        if obj.Name == "BeeBlur" or obj.Name == "ColorCorrection" or obj.Name == "ColorCCorrection" then
+            task.wait(0.05)
+            obj:Destroy()
+        end
+    end)
+
+    -- FOV watcher
+    Camera.FieldOfView = 70
+    _G.fovWatcher = RS.RenderStepped:Connect(function()
+        if Camera.FieldOfView == 20 then
+            Camera.FieldOfView = 70
+        end
+    end)
+
+    -- Reverse movement (W<->S, A<->D)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+
+    _G.reverseConn = RS.RenderStepped:Connect(function()
+        local moveDir = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then
+            moveDir = moveDir - Vector3.new(0, 0, 1)
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then
+            moveDir = moveDir + Vector3.new(0, 0, 1)
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then
+            moveDir = moveDir - Vector3.new(1, 0, 0)
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then
+            moveDir = moveDir + Vector3.new(1, 0, 0)
+        end
+
+        if moveDir.Magnitude > 0 then
+            hum:Move(moveDir, true)
+        end
+    end)
+end)
+
+
+
         -- =====================================================
         -- 7. OTHER FEATURES
         -- =====================================================
