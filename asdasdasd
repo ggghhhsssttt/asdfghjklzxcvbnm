@@ -1,4 +1,4 @@
--- MINI HUB - SCROLLING + ALL BUTTONS + ANTI RAGDOLL + SPAM TOOLS
+-- anti bee
 local player = game.Players.LocalPlayer
 local RS   = game:GetService("RunService")
 local UIS  = game:GetService("UserInputService")
@@ -195,9 +195,11 @@ task.spawn(function()
                 keyBox.TextColor3 = Color3.new(1,1,0)
             end)
 
-            local state = CONFIG.states[name] or false
-            btn.Text = name..(state and " [ON]" or " [OFF]")
-            btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
+local state = CONFIG.states[name] or false
+btn.Text = name..(state and " [ON]" or " [OFF]")
+btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
+if state then callback(true) end
+
 
             btn.MouseButton1Click:Connect(function()
                 state = not state
@@ -212,7 +214,7 @@ task.spawn(function()
         end
 
         -- =====================================================
-        -- 6. STEAL FLOOR – FINAL
+        -- 6. STEAL FLOOR ￢ﾀﾓ FINAL
         -- =====================================================
         makeBtn("Steal Floor",110,function(state)
             if not state then
@@ -327,42 +329,39 @@ makeBtn("Anti Bee", 160, function(state)
     local UIS = game:GetService("UserInputService")
     local Camera = workspace.CurrentCamera
     local RS = game:GetService("RunService")
+    local player = game.Players.LocalPlayer
 
     local function deleteBeeEffects()
-        for _, name in ipairs({"BeeBlur", "ColorCorrection", "ColorCCorrection"}) do
+        for _, name in ipairs({"BeeBlur", "ColorCorrection", "ColorCCorrection", "DiscoEffect", "Blur"}) do
             local obj = Lighting:FindFirstChild(name)
             if obj then obj:Destroy() end
         end
     end
 
-    if _G.antiBeeConn then
-        _G.antiBeeConn:Disconnect()
-        _G.antiBeeConn = nil
-    end
-    if _G.reverseConn then
-        _G.reverseConn:Disconnect()
-        _G.reverseConn = nil
-    end
-    if _G.fovWatcher then
-        _G.fovWatcher:Disconnect()
-        _G.fovWatcher = nil
-    end
+    -- Disconnect previous connections
+    if _G.antiBeeConn then _G.antiBeeConn:Disconnect() _G.antiBeeConn = nil end
+    if _G.reverseConn then _G.reverseConn:Disconnect() _G.reverseConn = nil end
+    if _G.fovWatcher then _G.fovWatcher:Disconnect() _G.fovWatcher = nil end
 
     if not state then return end
 
     -- Delete effects instantly and keep deleting new ones
     deleteBeeEffects()
     _G.antiBeeConn = Lighting.DescendantAdded:Connect(function(obj)
-        if obj.Name == "BeeBlur" or obj.Name == "ColorCorrection" or obj.Name == "ColorCCorrection" then
+        if obj.Name == "BeeBlur" 
+        or obj.Name == "ColorCorrection" 
+        or obj.Name == "ColorCCorrection"
+        or obj.Name == "DiscoEffect"
+        or obj.Name == "Blur" then
             task.wait(0.05)
             obj:Destroy()
         end
     end)
 
-    -- FOV watcher
+    -- FOV watcher: always 70
     Camera.FieldOfView = 70
     _G.fovWatcher = RS.RenderStepped:Connect(function()
-        if Camera.FieldOfView == 20 then
+        if Camera.FieldOfView ~= 70 then
             Camera.FieldOfView = 70
         end
     end)
@@ -373,24 +372,15 @@ makeBtn("Anti Bee", 160, function(state)
 
     _G.reverseConn = RS.RenderStepped:Connect(function()
         local moveDir = Vector3.zero
-        if UIS:IsKeyDown(Enum.KeyCode.W) then
-            moveDir = moveDir - Vector3.new(0, 0, 1)
-        end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then
-            moveDir = moveDir + Vector3.new(0, 0, 1)
-        end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then
-            moveDir = moveDir - Vector3.new(1, 0, 0)
-        end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then
-            moveDir = moveDir + Vector3.new(1, 0, 0)
-        end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir - Vector3.new(0,0,1) end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0,0,1) end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Vector3.new(1,0,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1,0,0) end
 
-        if moveDir.Magnitude > 0 then
-            hum:Move(moveDir, true)
-        end
+        if moveDir.Magnitude > 0 then hum:Move(moveDir, true) end
     end)
 end)
+
 
 
 
@@ -426,6 +416,181 @@ end)
         end
     end)
 end)
+
+-- === MINI HUB BUTTON ===
+makeBtn("Flight", 80, function(state)
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local existingGUI = playerGui:FindFirstChild("SpeedHelperGUI")
+    if not state then
+        if existingGUI then
+            existingGUI:Destroy()
+        end
+        return
+    end
+
+    if existingGUI then return end
+
+    -- === FLIGHT GUI ===
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "SpeedHelperGUI"
+    gui.ResetOnSpawn = false
+    gui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 150)
+    -- Fixed middle-left position
+    frame.Position = UDim2.new(1, -10, 0.5, -75)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = gui
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundTransparency = 1
+    title.Text = "Speed Helper"
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.Parent = frame
+
+    -- Flight Toggle Button
+    local flying = false
+    local flightConn
+    local speed = CONFIG.FlightSpeed or 29
+    local vertical = 65
+
+    local function enableFlight()
+        local char = player.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if not hrp or not hum then return end
+
+        hum.PlatformStand = false
+        flightConn = RS.Heartbeat:Connect(function()
+            if not hrp or not hum then return end
+            local moveDir = hum.MoveDirection
+            local vel = Vector3.new(moveDir.X * speed, 0, moveDir.Z * speed)
+            if hum.Jump then
+                vel += Vector3.new(0, vertical, 0)
+            elseif UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+                vel += Vector3.new(0, -vertical, 0)
+            end
+            hrp.Velocity = hrp.Velocity:Lerp(vel, 0.55)
+        end)
+    end
+
+    local function disableFlight()
+        if flightConn then
+            flightConn:Disconnect()
+            flightConn = nil
+        end
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.PlatformStand = false
+        end
+    end
+
+    local flightBtn = Instance.new("TextButton")
+    flightBtn.Size = UDim2.new(1, -20, 0, 50)
+    flightBtn.Position = UDim2.new(0, 10, 0, 35)
+    flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [OFF]"
+    flightBtn.TextColor3 = Color3.new(1, 1, 1)
+    flightBtn.Font = Enum.Font.GothamBold
+    flightBtn.TextSize = 18
+    flightBtn.Parent = frame
+    Instance.new("UICorner", flightBtn).CornerRadius = UDim.new(0, 12)
+
+    -- Set initial state from config
+    if CONFIG.states["Flight"] then
+        flying = true
+        enableFlight()
+        flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [ON]"
+        flightBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    end
+
+    flightBtn.MouseButton1Click:Connect(function()
+        flying = not flying
+        if flying then
+            enableFlight()
+            flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [ON]"
+            flightBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        else
+            disableFlight()
+            flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [OFF]"
+            flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        end
+        CONFIG.states["Flight"] = flying
+        saveConfig()
+    end)
+
+    -- Slider
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Size = UDim2.new(1, -20, 0, 20)
+    sliderFrame.Position = UDim2.new(0, 10, 0, 95)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    sliderFrame.Parent = frame
+    Instance.new("UICorner", sliderFrame).CornerRadius = UDim.new(0, 6)
+
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Size = UDim2.new(speed/29, 0, 1, 0)
+    sliderBar.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    sliderBar.Parent = sliderFrame
+    Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 6)
+
+    local sliderLabel = Instance.new("TextLabel")
+    sliderLabel.Size = UDim2.new(1, 0, 0, 20)
+    sliderLabel.Position = UDim2.new(0, 0, 0, 25)
+    sliderLabel.BackgroundTransparency = 1
+    sliderLabel.Text = "Speed: " .. speed
+    sliderLabel.TextColor3 = Color3.new(1,1,1)
+    sliderLabel.Font = Enum.Font.Gotham
+    sliderLabel.TextSize = 14
+    sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+    sliderLabel.Parent = sliderFrame
+
+    -- Dragging logic
+    local dragging = false
+    local function updateSlider(x)
+        local framePos = sliderFrame.AbsolutePosition.X
+        local frameSize = sliderFrame.AbsoluteSize.X
+        local newVal = math.clamp((x - framePos) / frameSize, 0, 1) * 29
+        speed = math.floor(newVal*100)/100
+        sliderBar.Size = UDim2.new(speed/29, 0, 1, 0)
+        sliderLabel.Text = "Speed: " .. tostring(speed)
+        CONFIG.FlightSpeed = speed
+        saveConfig()
+    end
+
+    sliderFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(input.Position.X)
+            frame.Draggable = false
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input.Position.X)
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            frame.Draggable = true
+        end
+    end)
+end)
+
+
 
         makeBtn("Jump Boost",55,function(state)
             if _G.jumpBoostConn then _G.jumpBoostConn:Disconnect(); _G.jumpBoostConn=nil end
@@ -702,7 +867,7 @@ makeBtn("Anti Ragdoll", 1, function(state)
 end)
 
 
--- === SPAM TOOLS – BIGGER BUTTON + KEYBIND + CONFIG ===
+-- === SPAM TOOLS ￢ﾀﾓ BIGGER BUTTON + KEYBIND + CONFIG ===
 local player = game.Players.LocalPlayer
 local RS = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
