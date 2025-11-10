@@ -24,194 +24,235 @@ task.spawn(function()
         end
         loadConfig()
 
-        -- GUI
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "MiniHub"
-        gui.ResetOnSpawn = false
-        gui.Parent = player.PlayerGui
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "FuwattiHub"
+gui.ResetOnSpawn = false
+gui.Parent = player.PlayerGui
 
-        local window = Instance.new("Frame")
-        window.Size = UDim2.new(0, 280, 0, 600)
-        window.Position = UDim2.new(0, 10, 0.5, -300)
-        window.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        window.Active = true
-        window.Draggable = true
-        window.ClipsDescendants = true
-        window.Parent = gui
-        local corner = Instance.new("UICorner", window); corner.CornerRadius = UDim.new(0, 12)
+-- Main window
+local window = Instance.new("Frame")
+window.Size = UDim2.new(0, 280, 0, 600)
+window.Position = UDim2.new(0, 10, 0.5, -300)
+window.BackgroundColor3 = Color3.fromRGB(25,25,25)
+window.Active = true
+window.Draggable = true
+window.ClipsDescendants = true
+window.Parent = gui
+local corner = Instance.new("UICorner", window)
+corner.CornerRadius = UDim.new(0, 12)
 
-        local title = Instance.new("TextButton")
-        title.Size = UDim2.new(1, -10, 0, 30)
-        title.Position = UDim2.new(0, 5, 0, 5)
-        title.BackgroundTransparency = 1
-        title.Text = "MINI HUB Down Arrow"
-        title.TextColor3 = Color3.new(1,1,1)
-        title.Font = Enum.Font.GothamBold
-        title.TextSize = 16
-        title.Parent = window
+-- Smooth purple-black border
+local border = Instance.new("UIStroke")
+border.Parent = window
+border.Thickness = 3
+border.Color = Color3.fromRGB(120,0,200) -- starting purple
+border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-        local close = Instance.new("TextButton")
-        close.Size = UDim2.new(0, 25, 0, 25)
-        close.Position = UDim2.new(1, -33, 0, 8)
-        close.BackgroundColor3 = Color3.fromRGB(220,50,50)
-        close.Text = "X"
-        close.TextColor3 = Color3.new(1,1,1)
-        close.Font = Enum.Font.GothamBold
-        close.TextSize = 16
-        close.Parent = window
-        local closeCorner = Instance.new("UICorner", close); closeCorner.CornerRadius = UDim.new(0, 6)
-
-        local saveBtn = Instance.new("TextButton")
-        saveBtn.Size = UDim2.new(1, -20, 0, 35)
-        saveBtn.Position = UDim2.new(0, 10, 1, -45)
-        saveBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        saveBtn.Text = "SAVE CONFIG"
-        saveBtn.TextColor3 = Color3.new(1,1,1)
-        saveBtn.Font = Enum.Font.GothamBold
-        saveBtn.TextSize = 14
-        saveBtn.Parent = window
-        local saveCorner = Instance.new("UICorner", saveBtn); saveCorner.CornerRadius = UDim.new(0, 8)
-
-        -- SCROLLING CONTAINER
-        local scroll = Instance.new("ScrollingFrame")
-        scroll.Size = UDim2.new(1, -20, 1, -90)
-        scroll.Position = UDim2.new(0, 10, 0, 40)
-        scroll.BackgroundTransparency = 1
-        scroll.ScrollBarThickness = 6
-        scroll.ScrollBarImageColor3 = Color3.fromRGB(100,100,100)
-        scroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Auto
-        scroll.Visible = true
-        scroll.Parent = window
-
-        local layout = Instance.new("UIListLayout")
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Padding = UDim.new(0, 8)
-        layout.Parent = scroll
-
-        -- Auto resize canvas
-        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
-        end)
-
-        local isOpen = true
-        title.MouseButton1Click:Connect(function()
-            isOpen = not isOpen
-            title.Text = "MINI HUB " .. (isOpen and "Down Arrow" or "Right Arrow")
-            scroll.Visible = isOpen
-            saveBtn.Visible = isOpen
-            window.Size = UDim2.new(0, 280, 0, isOpen and 600 or 40)
-        end)
-
-        close.MouseButton1Click:Connect(function()
-            saveConfig()
-            gui:Destroy()
-        end)
-
-        saveBtn.MouseButton1Click:Connect(function()
-            saveConfig()
-            saveBtn.Text = "SAVED!"
-            task.delay(1, function() saveBtn.Text = "SAVE CONFIG" end)
-        end)
-
-        -- INPUT
-        local bindingName, bindingKeyBox, buttons = nil, nil, {}
-        UIS.InputBegan:Connect(function(inp, gp)
-            if gp then return end
-            local key = inp.KeyCode
-            local keyName = key.Name
-            if keyName == "Return" then keyName = "ENTER" end
-            if keyName == "Space" then keyName = "SPACE" end
-
-            if key == Enum.KeyCode.LeftAlt or key == Enum.KeyCode.RightAlt then
-                if bindingName then
-                    CONFIG.keybinds[bindingName] = nil
-                    bindingKeyBox.Text = "NONE"
-                    bindingKeyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
-                    bindingName, bindingKeyBox = nil, nil
-                    saveConfig()
-                end
-                return
-            end
-
-            if bindingName then
-                CONFIG.keybinds[bindingName] = keyName
-                bindingKeyBox.Text = keyName
-                bindingKeyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
-                bindingName, bindingKeyBox = nil, nil
-                saveConfig()
-                return
-            end
-
-            for name, data in pairs(CONFIG.keybinds) do
-                if data == keyName then
-                    local btnInfo = buttons[name]
-                    if not btnInfo then continue end
-                    local newState = not (CONFIG.states[name] or false)
-                    CONFIG.states[name] = newState
-                    btnInfo.btn.Text = name .. (newState and " [ON]" or " [OFF]")
-                    btnInfo.btn.BackgroundColor3 = newState and btnInfo.on or btnInfo.off
-                    btnInfo.callback(newState)
-                    saveConfig()
-                end
-            end
-        end)
-
-        -- BUTTON FACTORY
-        local OFF_COLOR = Color3.fromRGB(30,30,30)
-        local ON_COLOR  = Color3.fromRGB(0,170,255)
-
-        local function makeBtn(name, order, callback)
-            local frame = Instance.new("Frame")
-            frame.Size = UDim2.new(1,0,0,45)
-            frame.BackgroundTransparency = 1
-            frame.LayoutOrder = order
-            frame.Parent = scroll
-
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(0,190,1,0)
-            btn.BackgroundColor3 = OFF_COLOR
-            btn.Text = name.." [OFF]"
-            btn.TextColor3 = Color3.new(1,1,1)
-            btn.Font = Enum.Font.GothamBold
-            btn.TextSize = 15
-            btn.Parent = frame
-            local btnCorner = Instance.new("UICorner", btn); btnCorner.CornerRadius = UDim.new(0, 10)
-
-            local keyBox = Instance.new("TextButton")
-            keyBox.Size = UDim2.new(0,60,1,0)
-            keyBox.Position = UDim2.new(1,-65,0,0)
-            keyBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
-            keyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
-            keyBox.Font = Enum.Font.Gotham
-            keyBox.TextSize = 13
-            keyBox.Text = CONFIG.keybinds[name] or "NONE"
-            keyBox.Parent = frame
-            local keyCorner = Instance.new("UICorner", keyBox); keyCorner.CornerRadius = UDim.new(0, 8)
-
-            keyBox.MouseButton1Click:Connect(function()
-                bindingName = name
-                bindingKeyBox = keyBox
-                keyBox.Text = "PRESS KEY..."
-                keyBox.TextColor3 = Color3.new(1,1,0)
-            end)
-
-local state = CONFIG.states[name] or false
-btn.Text = name..(state and " [ON]" or " [OFF]")
-btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
-if state then callback(true) end
-
-
-            btn.MouseButton1Click:Connect(function()
-                state = not state
-                btn.Text = name..(state and " [ON]" or " [OFF]")
-                btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
-                CONFIG.states[name] = state
-                callback(state)
-                saveConfig()
-            end)
-
-            buttons[name] = {btn=btn, keyBox=keyBox, off=OFF_COLOR, on=ON_COLOR, callback=callback}
+-- Animate border between purple and black
+spawn(function()
+    local increment = true
+    local colorVal = 0
+    while window.Parent do
+        -- faster increment
+        if increment then
+            colorVal = colorVal + 0.03 -- faster
+            if colorVal >= 1 then increment = false end
+        else
+            colorVal = colorVal - 0.03
+            if colorVal <= 0 then increment = true end
         end
+        -- smooth purple ↔ black transition (no blue flash)
+        border.Color = Color3.fromRGB(
+            math.floor(25 + 95*colorVal), -- red channel
+            0,                           -- green always 0
+            math.floor(50 + 150*colorVal) -- blue channel, deep purple
+        )
+        task.wait(0.01) -- faster
+    end
+end)
+
+
+-- Title
+local title = Instance.new("TextButton")
+title.Size = UDim2.new(1, -10, 0, 30)
+title.Position = UDim2.new(0, 5, 0, 5)
+title.BackgroundTransparency = 1
+title.Text = "Fuwatti Hub ▼"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.Parent = window
+
+-- Close button (purple)
+local close = Instance.new("TextButton")
+close.Size = UDim2.new(0, 25, 0, 25)
+close.Position = UDim2.new(1, -33, 0, 8)
+close.BackgroundColor3 = Color3.fromRGB(120,0,200)
+close.Text = "X"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 16
+close.Parent = window
+local closeCorner = Instance.new("UICorner", close)
+closeCorner.CornerRadius = UDim.new(0, 6)
+
+-- Save button (purple)
+local saveBtn = Instance.new("TextButton")
+saveBtn.Size = UDim2.new(1, -20, 0, 35)
+saveBtn.Position = UDim2.new(0, 10, 1, -45)
+saveBtn.BackgroundColor3 = Color3.fromRGB(120,0,200)
+saveBtn.Text = "SAVE CONFIG"
+saveBtn.TextColor3 = Color3.new(1,1,1)
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.TextSize = 14
+saveBtn.Parent = window
+local saveCorner = Instance.new("UICorner", saveBtn)
+saveCorner.CornerRadius = UDim.new(0, 8)
+
+-- Scrolling container
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -20, 1, -90)
+scroll.Position = UDim2.new(0, 10, 0, 40)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 6
+scroll.ScrollBarImageColor3 = Color3.fromRGB(120,0,200)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.Visible = true
+scroll.Parent = window
+
+local layout = Instance.new("UIListLayout")
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 8)
+layout.Parent = scroll
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+end)
+
+-- Open/Close toggle
+local isOpen = true
+title.MouseButton1Click:Connect(function()
+    isOpen = not isOpen
+    title.Text = "Fuwatti Hub " .. (isOpen and "▼" or "▲") -- fixed arrows
+    scroll.Visible = isOpen
+    saveBtn.Visible = isOpen
+    window.Size = UDim2.new(0, 280, 0, isOpen and 600 or 40)
+end)
+
+-- Close GUI
+close.MouseButton1Click:Connect(function()
+    saveConfig()
+    gui:Destroy()
+end)
+
+-- Save config
+saveBtn.MouseButton1Click:Connect(function()
+    saveConfig()
+    saveBtn.Text = "SAVED!"
+    task.delay(1, function() saveBtn.Text = "SAVE CONFIG" end)
+end)
+
+-- BUTTON FACTORY COLORS
+local OFF_COLOR = Color3.fromRGB(30,30,30)
+local ON_COLOR = Color3.fromRGB(120,0,200) -- purple
+
+local bindingName, bindingKeyBox, buttons = nil, nil, {}
+
+UIS.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    local key = inp.KeyCode
+    local keyName = key.Name
+    if keyName == "Return" then keyName = "ENTER" end
+    if keyName == "Space" then keyName = "SPACE" end
+
+    if key == Enum.KeyCode.LeftAlt or key == Enum.KeyCode.RightAlt then
+        if bindingName then
+            CONFIG.keybinds[bindingName] = nil
+            bindingKeyBox.Text = "NONE"
+            bindingKeyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
+            bindingName, bindingKeyBox = nil, nil
+            saveConfig()
+        end
+        return
+    end
+
+    if bindingName then
+        CONFIG.keybinds[bindingName] = keyName
+        bindingKeyBox.Text = keyName
+        bindingKeyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
+        bindingName, bindingKeyBox = nil, nil
+        saveConfig()
+        return
+    end
+
+    for name, data in pairs(CONFIG.keybinds) do
+        if data == keyName then
+            local btnInfo = buttons[name]
+            if not btnInfo then continue end
+            local newState = not (CONFIG.states[name] or false)
+            CONFIG.states[name] = newState
+            btnInfo.btn.Text = name .. (newState and " [ON]" or " [OFF]")
+            btnInfo.btn.BackgroundColor3 = newState and btnInfo.on or btnInfo.off
+            btnInfo.callback(newState)
+            saveConfig()
+        end
+    end
+end)
+
+local function makeBtn(name, order, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1,0,0,45)
+    frame.BackgroundTransparency = 1
+    frame.LayoutOrder = order
+    frame.Parent = scroll
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0,190,1,0)
+    btn.BackgroundColor3 = OFF_COLOR
+    btn.Text = name.." [OFF]"
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 15
+    btn.Parent = frame
+    local btnCorner = Instance.new("UICorner", btn); btnCorner.CornerRadius = UDim.new(0, 10)
+
+    local keyBox = Instance.new("TextButton")
+    keyBox.Size = UDim2.new(0,60,1,0)
+    keyBox.Position = UDim2.new(1,-65,0,0)
+    keyBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    keyBox.TextColor3 = Color3.new(0.8,0.8,0.8)
+    keyBox.Font = Enum.Font.Gotham
+    keyBox.TextSize = 13
+    keyBox.Text = CONFIG.keybinds[name] or "NONE"
+    keyBox.Parent = frame
+    local keyCorner = Instance.new("UICorner", keyBox); keyCorner.CornerRadius = UDim.new(0, 8)
+
+    keyBox.MouseButton1Click:Connect(function()
+        bindingName = name
+        bindingKeyBox = keyBox
+        keyBox.Text = "PRESS KEY..."
+        keyBox.TextColor3 = Color3.new(1,1,0)
+    end)
+
+    local state = CONFIG.states[name] or false
+    btn.Text = name..(state and " [ON]" or " [OFF]")
+    btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
+    if state then callback(true) end
+
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = name..(state and " [ON]" or " [OFF]")
+        btn.BackgroundColor3 = state and ON_COLOR or OFF_COLOR
+        CONFIG.states[name] = state
+        callback(state)
+        saveConfig()
+    end)
+
+    buttons[name] = {btn=btn, keyBox=keyBox, off=OFF_COLOR, on=ON_COLOR, callback=callback}
+end
+
+
 
         -- =====================================================
         -- 6. STEAL FLOOR ￢ﾀﾓ FINAL
@@ -322,6 +363,7 @@ if state then callback(true) end
                 end
             end))
         end)
+
 
 
 makeBtn("Anti Bee", 160, function(state)
@@ -757,115 +799,6 @@ end)
             end)
         end)
 
-makeBtn("Anti Ragdoll", 1, function(state)
-    -- Cleanup
-    if _G.afRemoteConn then _G.afRemoteConn:Disconnect() end
-    if _G.afStateConn then _G.afStateConn:Disconnect() end
-    if _G.afInputConn then _G.afInputConn:Disconnect() end
-    if _G.afVelocity then _G.afVelocity:Destroy() end
-    _G.afRemoteConn, _G.afStateConn, _G.afInputConn, _G.afVelocity = nil, nil, nil, nil
-
-    -- Restore physics
-    if not state and _G.originalPhysicalProps then
-        for part, props in pairs(_G.originalPhysicalProps) do
-            if part and part.Parent then
-                pcall(function() part.CustomPhysicalProperties = props end)
-            end
-        end
-        _G.originalPhysicalProps = nil
-    end
-
-    if not state then return end
-
-    local char = player.Character or player.CharacterAdded:Wait()
-    local hum = char:WaitForChild("Humanoid")
-    local torso = char:FindFirstChild("UpperTorso") or char:WaitForChild("HumanoidRootPart")
-    local RagdollRemote = game.ReplicatedStorage.Packages.Ragdoll.Ragdoll
-
-    -- Save physics
-    if not _G.originalPhysicalProps then
-        _G.originalPhysicalProps = {}
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
-                _G.originalPhysicalProps[part] = part.CustomPhysicalProperties
-            end
-        end
-    end
-
-    -- Dense physics (anti-fling)
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
-        end
-    end
-
-    -- Lightweight BodyVelocity for movement + float
-    local function setupVelocity()
-        if _G.afVelocity then _G.afVelocity:Destroy() end
-        _G.afVelocity = Instance.new("BodyVelocity")
-        _G.afVelocity.MaxForce = Vector3.new(10000, 5000, 10000)
-        _G.afVelocity.Velocity = Vector3.zero
-        _G.afVelocity.Parent = torso
-    end
-
-    -- WASD movement
-    local function handleMovement()
-        if _G.afInputConn then _G.afInputConn:Disconnect() end
-        _G.afInputConn = game:GetService("UserInputService").InputChanged:Connect(function(input, gp)
-            if gp or not _G.afVelocity or not hum or hum:GetState() ~= Enum.HumanoidStateType.Ragdoll then return end
-            local moveDir = Vector3.zero
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                if input.KeyCode == Enum.KeyCode.W then moveDir += Vector3.new(0, 0, -1) end
-                if input.KeyCode == Enum.KeyCode.S then moveDir += Vector3.new(0, 0, 1) end
-                if input.KeyCode == Enum.KeyCode.A then moveDir += Vector3.new(-1, 0, 0) end
-                if input.KeyCode == Enum.KeyCode.D then moveDir += Vector3.new(1, 0, 0) end
-            end
-            -- Minimal float + movement
-            _G.afVelocity.Velocity = (moveDir * 20) + Vector3.new(0, 2, 0) -- Tiny upward force
-        end)
-    end
-
-    -- Start on ragdoll
-    _G.afRemoteConn = RagdollRemote.OnClientEvent:Connect(function(...)
-        local args = {...}
-        if args[2] == "manualD" or args[2] == "manualM" then
-            task.spawn(function()
-                task.wait()
-                if hum and hum.Parent then
-                    hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
-                    setupVelocity()
-                    handleMovement()
-                end
-            end)
-        end
-    end)
-
-    -- Ensure movement during ragdoll state
-    _G.afStateConn = hum.StateChanged:Connect(function(_, new)
-        if new == Enum.HumanoidStateType.Ragdoll then
-            setupVelocity()
-            handleMovement()
-        elseif new == Enum.HumanoidStateType.Running or new == Enum.HumanoidStateType.GettingUp then
-            if _G.afVelocity then _G.afVelocity:Destroy(); _G.afVelocity = nil end
-            if _G.afInputConn then _G.afInputConn:Disconnect(); _G.afInputConn = nil end
-        end
-    end)
-
-    -- Reapply on character respawn
-    player.CharacterAdded:Connect(function(newChar)
-        char = newChar
-        hum = char:WaitForChild("Humanoid")
-        torso = char:FindFirstChild("UpperTorso") or char:WaitForChild("HumanoidRootPart")
-        if state then
-            for _, part in ipairs(char:GetChildren()) do
-                if part:IsA("BasePart") then
-                    _G.originalPhysicalProps[part] = part.CustomPhysicalProperties
-                    part.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
-                end
-            end
-        end
-    end)
-end)
 
 
 -- === SPAM TOOLS ￢ﾀﾓ BIGGER BUTTON + KEYBIND + CONFIG ===
