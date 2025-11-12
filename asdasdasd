@@ -809,6 +809,94 @@ local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 
+makeBtn("Laser Lag", 110, function(state)
+    -- SAFE: Manual checks
+    local player = game.Players.LocalPlayer
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local replicated_storage = game:GetService("ReplicatedStorage")
+    local http_service = game:GetService("HttpService")
+    local run_service = game:GetService("RunService")
+    local user_input_service = game:GetService("UserInputService")
+
+    local local_player = player
+    local remote = replicated_storage.Packages.Net['RE/LaserGun_Fire']
+    local settings = require(replicated_storage.Shared.LaserGunsShared).Settings
+
+    -- Clean old connection
+    if _G.laserLagConn then
+        _G.laserLagConn:Disconnect()
+        _G.laserLagConn = nil
+    end
+
+    if not state then return end
+
+    -- === GUN MODS (APPLY ONCE) ===
+    settings.Radius.Value = 256
+    settings.MaxBounces.Value = 9999
+    settings.MaxAge.Value = 1e6
+    settings.StunDuration.Value = 60
+    settings.ImpulseForce.Value = 1e6
+    settings.Cooldown.Value = 0
+
+    -- === STATES ===
+    local lagger_enabled = true
+    local last_equipped = false
+
+    -- === GET NEAREST FUNCTION ===
+    local function get_nearest()
+        local nearest_player
+        local shortest_distance = math.huge
+        local local_character = local_player.Character
+        if not local_character or not local_character.PrimaryPart then
+            return nil
+        end
+        local local_position = local_character.PrimaryPart.Position
+        for _, p in ipairs(game.Players:GetPlayers()) do
+            local character = p.Character
+            if p ~= local_player and character and character.PrimaryPart then
+                local distance = (local_position - character.PrimaryPart.Position).Magnitude
+                if distance < shortest_distance then
+                    shortest_distance = distance
+                    nearest_player = p
+                end
+            end
+        end
+        return nearest_player
+    end
+
+    -- === MAIN LASER SPAM LOOP ===
+    _G.laserLagConn = run_service.RenderStepped:Connect(function()
+        local character = local_player.Character
+        if not character then return end
+
+        local tool = character:FindFirstChildOfClass('Tool')
+        local tool_equipped = tool and tool.Name == 'Laser Gun'
+        if tool_equipped ~= last_equipped then
+            last_equipped = tool_equipped
+        end
+
+        if not (lagger_enabled and tool_equipped) then
+            return
+        end
+
+        local target_player = get_nearest()
+        if not target_player then return end
+
+        local target_char = target_player.Character
+        if not (target_char and target_char.PrimaryPart and character.PrimaryPart) then return end
+
+        local pos1 = character.PrimaryPart.Position
+        local pos2 = target_char.PrimaryPart.Position
+        local direction = (pos2 - pos1).Unit
+        local id = http_service:GenerateGUID(false):lower():gsub('%-', '')
+
+        remote:FireServer(id, pos1, direction, workspace:GetServerTimeNow())
+    end)
+end)
+
+
 makeBtn("Spam Tools", 3, function(state)
     -- === CLEANUP ===
     if _G.SpamTools then
