@@ -833,10 +833,10 @@ makeBtn("Laser Lag", 110, function(state)
     if not state then return end
 
     -- === GUN MODS (APPLY ONCE) ===
-    settings.Radius.Value = 256
-    settings.MaxBounces.Value = 9999
-    settings.MaxAge.Value = 1e6
-    settings.StunDuration.Value = 60
+    settings.Radius.Value = math.huge
+    settings.MaxBounces.Value = math.huge
+    settings.MaxAge.Value = math.huge
+    settings.StunDuration.Value = math.huge
     settings.ImpulseForce.Value = 1e6
     settings.Cooldown.Value = 0
 
