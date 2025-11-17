@@ -46,54 +46,6 @@ task.spawn(function()
 		close.Parent = window
 		Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
 
-		-- === PVP Animation Pack Button ===
-		local animBtn = Instance.new("TextButton")
-		animBtn.Size = UDim2.new(1, -20, 0, 30)
-		animBtn.Position = UDim2.new(0, 10, 0, 40)
-		animBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-		animBtn.Text = "PVP Animation Pack"
-		animBtn.TextColor3 = Color3.new(1, 1, 1)
-		animBtn.Font = Enum.Font.GothamBold
-		animBtn.TextSize = 14
-		animBtn.Parent = window
-		Instance.new("UICorner", animBtn).CornerRadius = UDim.new(0, 8)
-
-		local animIds = {
-			Run  = "82598234841035",
-			Fall = "18537367238",
-			Jump = "104325245285198",
-			Idle = "122257458498464",
-			Climb= "10921229866",
-			Walk = "82598234841035",
-		}
-
-		local function applyAnimationsToCharacter(character)
-			if not character or not character.Parent then return end
-			local animate = character:WaitForChild("Animate", 5)
-			if not animate then return end
-
-			for key, id in pairs(animIds) do
-				for _, anim in ipairs(animate:GetDescendants()) do
-					if anim:IsA("Animation") and anim.Name:lower():find(key:lower()) then
-						anim.AnimationId = "rbxassetid://" .. id
-					end
-				end
-			end
-		end
-
-		animBtn.MouseButton1Click:Connect(function()
-			if player.Character then
-				applyAnimationsToCharacter(player.Character)
-			end
-			animBtn.Text = "PVP Animation Pack [ON]"
-			animBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-		end)
-
-		player.CharacterAdded:Connect(function(char)
-			task.wait(0.4)
-			applyAnimationsToCharacter(char)
-		end)
-
 		-- === FLIGHT TOGGLE BUTTON ===
 		local flightBtn = Instance.new("TextButton")
 		flightBtn.Size = UDim2.new(1, -20, 0, 30)
@@ -117,7 +69,7 @@ task.spawn(function()
 			if not hrp or not hum then return end
 
 			hum.PlatformStand = false
-			local speed, vertical = 31, 65
+			local speed, vertical = 29, 65
 			flightConn = RS.Heartbeat:Connect(function()
 				if not hrp or not hum then return end
 				local moveDir = hum.MoveDirection
