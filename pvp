@@ -1,0 +1,685 @@
+local player = game.Players.LocalPlayer
+local RS = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+task.spawn(function()
+	pcall(function()
+		repeat task.wait() until player and player:FindFirstChild("PlayerGui") and Workspace
+		task.wait(0.3)
+
+		local REPlotServiceToggleFriends = ReplicatedStorage.Packages.Net["RE/PlotService/ToggleFriends"]
+
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "MiniHub"
+		gui.ResetOnSpawn = false
+		gui.Parent = player.PlayerGui
+
+		local window = Instance.new("Frame")
+		window.Size = UDim2.new(0, 300, 0, 220)
+		window.Position = UDim2.new(0, 10, 0.5, -110)
+		window.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		window.Active = true
+		window.Draggable = true
+		window.ClipsDescendants = true
+		window.Parent = gui
+		Instance.new("UICorner", window).CornerRadius = UDim.new(0, 12)
+
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, -40, 0, 30)
+		title.Position = UDim2.new(0, 10, 0, 5)
+		title.BackgroundTransparency = 1
+		title.Text = "PVP Helper"
+		title.TextColor3 = Color3.new(1, 1, 1)
+		title.Font = Enum.Font.GothamBold
+		title.TextSize = 16
+		title.Parent = window
+
+		local close = Instance.new("TextButton")
+		close.Size = UDim2.new(0, 25, 0, 25)
+		close.Position = UDim2.new(1, -33, 0, 8)
+		close.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+		close.Text = "X"
+		close.TextColor3 = Color3.new(1, 1, 1)
+		close.Font = Enum.Font.GothamBold
+		close.TextSize = 16
+		close.Parent = window
+		Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
+
+		-- === PVP Animation Pack Button ===
+		local animBtn = Instance.new("TextButton")
+		animBtn.Size = UDim2.new(1, -20, 0, 30)
+		animBtn.Position = UDim2.new(0, 10, 0, 40)
+		animBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		animBtn.Text = "PVP Animation Pack"
+		animBtn.TextColor3 = Color3.new(1, 1, 1)
+		animBtn.Font = Enum.Font.GothamBold
+		animBtn.TextSize = 14
+		animBtn.Parent = window
+		Instance.new("UICorner", animBtn).CornerRadius = UDim.new(0, 8)
+
+		local animIds = {
+			Run  = "82598234841035",
+			Fall = "18537367238",
+			Jump = "104325245285198",
+			Idle = "122257458498464",
+			Climb= "10921229866",
+			Walk = "82598234841035",
+		}
+
+		local function applyAnimationsToCharacter(character)
+			if not character or not character.Parent then return end
+			local animate = character:WaitForChild("Animate", 5)
+			if not animate then return end
+
+			for key, id in pairs(animIds) do
+				for _, anim in ipairs(animate:GetDescendants()) do
+					if anim:IsA("Animation") and anim.Name:lower():find(key:lower()) then
+						anim.AnimationId = "rbxassetid://" .. id
+					end
+				end
+			end
+		end
+
+		animBtn.MouseButton1Click:Connect(function()
+			if player.Character then
+				applyAnimationsToCharacter(player.Character)
+			end
+			animBtn.Text = "PVP Animation Pack [ON]"
+			animBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+		end)
+
+		player.CharacterAdded:Connect(function(char)
+			task.wait(0.4)
+			applyAnimationsToCharacter(char)
+		end)
+
+		-- === FLIGHT TOGGLE BUTTON ===
+		local flightBtn = Instance.new("TextButton")
+		flightBtn.Size = UDim2.new(1, -20, 0, 30)
+		flightBtn.Position = UDim2.new(0, 10, 0, 80)
+		flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		flightBtn.Text = "Toggle Flight 🕊️ [OFF]"
+		flightBtn.TextColor3 = Color3.new(1, 1, 1)
+		flightBtn.Font = Enum.Font.GothamBold
+		flightBtn.TextSize = 14
+		flightBtn.Parent = window
+		Instance.new("UICorner", flightBtn).CornerRadius = UDim.new(0, 8)
+
+		local flying = false
+		local flightConn
+
+		local function enableFlight()
+			local char = player.Character
+			if not char then return end
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			local hum = char:FindFirstChild("Humanoid")
+			if not hrp or not hum then return end
+
+			hum.PlatformStand = false
+			local speed, vertical = 31, 65
+			flightConn = RS.Heartbeat:Connect(function()
+				if not hrp or not hum then return end
+				local moveDir = hum.MoveDirection
+				local vel = Vector3.new(moveDir.X * speed, 0, moveDir.Z * speed)
+
+				if hum.Jump then
+					vel += Vector3.new(0, vertical, 0)
+				elseif game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
+					vel += Vector3.new(0, -vertical, 0)
+				end
+				hrp.Velocity = hrp.Velocity:Lerp(vel, 0.55)
+			end)
+		end
+
+		local function disableFlight()
+			if flightConn then
+				flightConn:Disconnect()
+				flightConn = nil
+			end
+			local char = player.Character
+			if char and char:FindFirstChild("Humanoid") then
+				char.Humanoid.PlatformStand = false
+			end
+		end
+
+		flightBtn.MouseButton1Click:Connect(function()
+			flying = not flying
+			if flying then
+				enableFlight()
+				flightBtn.Text = "Toggle Speed 🕊️ [ON]"
+				flightBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+			else
+				disableFlight()
+				flightBtn.Text = "Toggle Speed 🕊️ [OFF]"
+				flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			end
+		end)
+
+        -- === XRAY BUTTON ===
+local xrayBtn = Instance.new("TextButton")
+xrayBtn.Size = UDim2.new(1, -20, 0, 30)
+xrayBtn.Position = UDim2.new(0, 10, 0, 160)
+xrayBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+xrayBtn.Text = "Show Hitboxes / Xray Base [OFF]"
+xrayBtn.TextColor3 = Color3.new(1, 1, 1)
+xrayBtn.Font = Enum.Font.GothamBold
+xrayBtn.TextSize = 14
+xrayBtn.Parent = window
+Instance.new("UICorner", xrayBtn).CornerRadius = UDim.new(0, 8)
+
+local XRayEnabled = false
+local highlightFolder = Instance.new("Folder", game.CoreGui)
+highlightFolder.Name = "XRayHighlights"
+
+
+-- function to highlight a player
+local function highlightCharacter(char, enable)
+	if not char then return end
+	if enable then
+		if char:FindFirstChild("ESP_HIGHLIGHT") then return end
+		local hl = Instance.new("Highlight")
+		hl.Name = "ESP_HIGHLIGHT"
+		hl.FillTransparency = 0.6
+		hl.OutlineTransparency = 0
+		hl.FillColor = Color3.fromRGB(200, 0, 200)
+		hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+		hl.Parent = char
+	else
+		local hl = char:FindFirstChild("ESP_HIGHLIGHT")
+		if hl then hl:Destroy() end
+	end
+end
+
+
+-- MAIN XRAY LOOP
+task.spawn(function()
+	while task.wait(1.2) do
+		if XRayEnabled == false then continue end
+
+		for _, obj in ipairs(workspace:GetDescendants()) do
+			
+			-- __HITBOX parts
+			if obj:IsA("BasePart") and obj.Name == "__HITBOX" then
+				obj.Transparency = 0.4
+				obj.Color = Color3.fromRGB(255, 0, 0)
+				obj.Material = Enum.Material.ForceField
+			end
+
+			-- structure base home parts
+			if obj:IsA("BasePart") and obj.Name == "structure base home" then
+				obj.Transparency = 0.7
+			end
+		end
+
+		-- highlight all players
+		for _, plr in ipairs(game.Players:GetPlayers()) do
+			if plr.Character then
+				highlightCharacter(plr.Character, true)
+			end
+		end
+	end
+end)
+
+
+-- DELIVERY HITBOX OPTIMIZED LOOP (slower)
+task.spawn(function()
+	while task.wait(1.5) do
+		for _, obj in ipairs(workspace:GetDescendants()) do
+			if obj:IsA("BasePart") and obj.Name == "DeliveryHitbox" then
+				obj.Transparency = 0
+				obj.Material = Enum.Material.ForceField
+				obj.Color = Color3.fromRGB(255, 0, 0)
+			end
+		end
+	end
+end)
+
+
+-- XRAY BUTTON FUNCTIONALITY
+xrayBtn.MouseButton1Click:Connect(function()
+	XRayEnabled = not XRayEnabled
+
+	if XRayEnabled then
+		xrayBtn.Text = "Show Hitboxes / Xray Base [ON]"
+		xrayBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+
+		-- Enable highlight instantly
+		for _, plr in ipairs(game.Players:GetPlayers()) do
+			if plr.Character then
+				highlightCharacter(plr.Character, true)
+			end
+		end
+		
+	else
+		xrayBtn.Text = "Show Hitboxes / Xray Base [OFF]"
+		xrayBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+
+		-- Remove all highlights
+		for _, plr in ipairs(game.Players:GetPlayers()) do
+			if plr.Character then
+				highlightCharacter(plr.Character, false)
+			end
+		end
+	end
+end)
+
+-- update highlight on respawn
+game.Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function(char)
+		if XRayEnabled then
+			task.wait(0.5)
+			highlightCharacter(char, true)
+		end
+	end)
+end)
+
+-- === AUTO BAT BUTTON ===
+local autoBatBtn = Instance.new("TextButton")
+autoBatBtn.Size = UDim2.new(1, -20, 0, 30)
+autoBatBtn.Position = UDim2.new(0, 10, 0, 200)
+autoBatBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+autoBatBtn.Text = "Auto Bat [OFF]"
+autoBatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoBatBtn.Font = Enum.Font.GothamBold
+autoBatBtn.TextSize = 14
+autoBatBtn.Parent = window
+Instance.new("UICorner", autoBatBtn).CornerRadius = UDim.new(0, 8)
+
+local autoBatEnabled = false
+
+
+-- FPS BOOST: remove layered clothing
+local function stripLayeredClothes()
+	for _, plr in ipairs(game.Players:GetPlayers()) do
+		if plr.Character then
+			for _, item in ipairs(plr.Character:GetChildren()) do
+				if item:IsA("Accessory") and item.AccessoryType == Enum.AccessoryType.TShirt then
+					item:Destroy()
+				elseif item:IsA("Accessory") and item.AccessoryType == Enum.AccessoryType.Shirt then
+					item:Destroy()
+				elseif item:IsA("Accessory") and item.AccessoryType == Enum.AccessoryType.Jacket then
+					item:Destroy()
+				elseif item:IsA("Accessory") and item.AccessoryType == Enum.AccessoryType.Sweater then
+					item:Destroy()
+				elseif item:IsA("Accessory") and item.AccessoryType == Enum.AccessoryType.Pants then
+					item:Destroy()
+				elseif item:IsA("Accessory") then
+					-- ANY layered clothing accessory
+					if item:FindFirstChild("Handle") and item.Handle:FindFirstChild("WrapTarget") then
+						item:Destroy()
+					end
+				end
+			end
+		end
+	end
+end
+
+
+-- find closest player
+local function getClosestPlayer(distLimit)
+	local char = player.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local closest, closestDist = nil, distLimit
+
+	for _, plr in ipairs(game.Players:GetPlayers()) do
+		if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+			local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+			if dist < closestDist then
+				closest = plr
+				closestDist = dist
+			end
+		end
+	end
+
+	return closest
+end
+
+
+-- equip Bat
+local function equipBat()
+	local char = player.Character
+	if not char then return end
+	local backpack = player:FindFirstChild("Backpack")
+	if not backpack then return end
+
+	local bat = backpack:FindFirstChild("Bat")
+	if bat then
+		bat.Parent = char
+		return bat
+	end
+
+	local eq = char:FindFirstChild("Bat")
+	return eq
+end
+
+
+-- disable when changing tools
+player.CharacterAdded:Connect(function(char)
+	char.ChildAdded:Connect(function(obj)
+		if not autoBatEnabled then return end
+		if obj:IsA("Tool") and obj.Name ~= "Bat" then
+			autoBatEnabled = false
+			autoBatBtn.Text = "Auto Bat [OFF]"
+			autoBatBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		end
+	end)
+end)
+
+
+-- BAT BEFORE PROX PROMPT FINISHES
+local promptConn = game.Workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("ProximityPrompt") then
+		obj.Triggered:Connect(function()
+			if autoBatEnabled then
+				task.wait(0.1)
+				local char = player.Character
+				if char then
+					local bat = equipBat()
+					if bat then bat:Activate() end
+				end
+			end
+		end)
+	end
+end)
+
+
+-- MAIN AUTO BAT LOOP (NO COOLDOWN)
+task.spawn(function()
+	while task.wait(0.05) do
+		if not autoBatEnabled then continue end
+
+		local char = player.Character
+		if not char then continue end
+
+		local hum = char:FindFirstChild("Humanoid")
+		if not hum then continue end
+
+		local bat = equipBat()
+		if not bat then continue end
+
+		local target = getClosestPlayer(9)
+		if target then
+			bat:Activate() -- no cooldown
+		end
+	end
+end)
+
+
+-- BUTTON TOGGLE
+autoBatBtn.MouseButton1Click:Connect(function()
+	autoBatEnabled = not autoBatEnabled
+
+	if autoBatEnabled then
+		stripLayeredClothes()
+
+		autoBatBtn.Text = "Auto Bat [ON]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+
+	else
+		autoBatBtn.Text = "Auto Bat [OFF]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	end
+end)
+
+
+local crashBtn = Instance.new("TextButton")
+crashBtn.Size = UDim2.new(1, -20, 0, 30)
+crashBtn.Position = UDim2.new(0, 10, 0, 240)
+crashBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+crashBtn.Text = "Spam Glitched Slap / Crash [OFF]"
+crashBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+crashBtn.Font = Enum.Font.GothamBold
+crashBtn.TextSize = 14
+crashBtn.Parent = window
+Instance.new("UICorner", crashBtn).CornerRadius = UDim.new(0, 8)
+
+local crashEnabled = false
+local _CRASH = nil   -- holds loop + connections
+
+local function getGlitchedSlap()
+    local char = player.Character
+    if not char then return nil end
+
+    -- in hand?
+    local tool = char:FindFirstChild("Glitched Slap")
+    if tool then return tool end
+
+    -- in backpack?
+    local bp = player:FindFirstChild("Backpack")
+    if bp then
+        tool = bp:FindFirstChild("Glitched Slap")
+        if tool then return tool end
+    end
+
+    return nil
+end
+
+local function equipGlitchedSlap()
+    local char = player.Character
+    if not char then return end
+    local tool = getGlitchedSlap()
+    if tool then
+        tool.Parent = char  -- no spam, just ensures it's equipped
+    end
+end
+
+local function cleanupCrash()
+    if not _CRASH then return end
+    if _CRASH.loop and _CRASH.loop.Disconnect then
+        pcall(function() _CRASH.loop:Disconnect() end)
+    end
+    if _CRASH.charConn and _CRASH.charConn.Disconnect then
+        pcall(function() _CRASH.charConn:Disconnect() end)
+    end
+    _CRASH = nil
+end
+
+crashBtn.MouseButton1Click:Connect(function()
+    crashEnabled = not crashEnabled
+
+    if not crashEnabled then
+        crashBtn.Text = "Spam Glitched Slap / Crash [OFF]"
+        crashBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        cleanupCrash()
+        return
+    end
+
+    -- Enable mode
+    crashBtn.Text = "Spam Glitched Slap / Crash [ON]"
+    crashBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+
+    _CRASH = {}
+
+    -- Auto re-equip after respawn
+    _CRASH.charConn = player.CharacterAdded:Connect(function(char)
+        task.wait(0.3)
+        equipGlitchedSlap()
+    end)
+
+    -- MAIN SPAM LOOP (no equip spam, ONLY Activate spam)
+    _CRASH.loop = game:GetService("RunService").Heartbeat:Connect(function()
+        if not crashEnabled then return end
+
+        local tool = getGlitchedSlap()
+        if not tool then return end
+
+        -- ensure it's equipped
+        if tool.Parent ~= player.Character then
+            tool.Parent = player.Character
+        end
+
+        -- nonstop hit spam
+        pcall(function()
+            tool:Activate()
+        end)
+    end)
+
+    -- initial equip
+    equipGlitchedSlap()
+end)
+
+-- === FIXED AUTO RESIZE (NOW COUNTS ALL BUTTONS PROPERLY) ===
+task.wait(0.3)
+
+local function autoResizeHub()
+    if not window then return end
+
+    local titleHeight = 40
+    local buttonHeight = 45
+    local spacing = 8
+    local sideMargin = 10
+
+    local buttonCount = 0
+    for _, child in ipairs(window:GetChildren()) do
+        if child:IsA("TextButton") and child.Name ~= "close" or child:IsA("Frame") then
+            buttonCount += 1
+        end
+    end
+
+    local totalHeight = titleHeight + (buttonCount * (buttonHeight + spacing)) + 20
+    window.Size = UDim2.new(0, 300, 0, math.clamp(totalHeight, 200, 700))
+end
+
+-- Force resize every time something is added
+window.ChildAdded:Connect(function()
+    task.wait()
+    autoResizeHub()
+end)
+
+-- Initial resize
+autoResizeHub()
+
+-- === AUTO RESIZE HUB ===
+task.wait(0.2)
+
+local function autoResizeHub()
+    if not window then return end
+
+    local padding = 50        -- space for title area
+    local spacing = 35        -- each button height + spacing
+
+    local count = 0
+    for _, child in ipairs(window:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("Frame") then
+            if child ~= close then
+                count += 1
+            end
+        end
+    end
+
+    local newHeight = padding + (count * spacing)
+
+    window.Size = UDim2.new(0, 300, 0, math.clamp(newHeight, 150, 600))
+end
+
+-- resize automatically after anything is added to the hub
+window.ChildAdded:Connect(function()
+    task.wait(0.05)
+    autoResizeHub()
+end)
+
+-- initial resize
+autoResizeHub()
+
+
+		-- === TOGGLE FRIENDS SECTION ===
+		local btnFrame = Instance.new("Frame")
+		btnFrame.Size = UDim2.new(1, -20, 0, 40)
+		btnFrame.Position = UDim2.new(0, 10, 0, 120)
+		btnFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		btnFrame.Parent = window
+		Instance.new("UICorner", btnFrame).CornerRadius = UDim.new(0, 10)
+
+		local dot = Instance.new("Frame")
+		dot.Size = UDim2.new(0, 16, 0, 16)
+		dot.Position = UDim2.new(0, 12, 0.5, -8)
+		dot.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		dot.Parent = btnFrame
+		Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -50, 1, 0)
+		btn.Position = UDim2.new(0, 40, 0, 0)
+		btn.BackgroundTransparency = 1
+		btn.Text = "Toggle Friends [OFF]"
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 15
+		btn.TextXAlignment = Enum.TextXAlignment.Left
+		btn.Parent = btnFrame
+
+		local function findBaseSign()
+			for _, plot in ipairs(Workspace:WaitForChild("Plots"):GetChildren()) do
+				local sign = plot:FindFirstChild("PlotSign")
+				if sign then
+					local gui = sign:FindFirstChild("YourBase")
+					if gui and gui:IsA("BillboardGui") and gui.Enabled then
+						return sign
+					end
+				end
+			end
+			return nil
+		end
+
+		local myPlot = nil
+		local lastCheck = 0
+
+		local function getMyPlot()
+			if tick() - lastCheck < 1 then return myPlot end
+			lastCheck = tick()
+			local sign = findBaseSign()
+			if not sign then
+				myPlot = nil
+				return nil
+			end
+			local targetPart = sign:FindFirstChildWhichIsA("BasePart") or sign
+			if not targetPart then
+				myPlot = nil
+				return nil
+			end
+			myPlot = targetPart.Parent
+			return myPlot
+		end
+
+		local function updateIndicator()
+			local plot = getMyPlot()
+			if not plot then
+				btn.Text = "Toggle Friends [NO BASE]"
+				dot.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+				return
+			end
+			local friendPanel = plot:FindFirstChild("FriendPanel")
+			if not friendPanel then return end
+			local main = friendPanel:FindFirstChild("Main")
+			if not main then return end
+			local prompt = main:FindFirstChild("ProximityPrompt")
+			if not prompt then return end
+			local objectText = prompt.ObjectText or ""
+			local isOn = (objectText == "Disallow Friends")
+
+			dot.BackgroundColor3 = isOn and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+			btn.Text = "Toggle Friends [" .. (isOn and "ON" or "OFF") .. "]"
+		end
+
+		btn.MouseButton1Click:Connect(function()
+			local plot = getMyPlot()
+			if not plot then
+				btn.Text = "Toggle Friends [NO BASE]"
+				task.delay(1, updateIndicator)
+				return
+			end
+			REPlotServiceToggleFriends:FireServer()
+			task.delay(0.3, updateIndicator)
+		end)
+
+		close.MouseButton1Click:Connect(function()
+			gui:Destroy()
+		end)
+
+		RS.Heartbeat:Connect(updateIndicator)
+	end)
+end)
