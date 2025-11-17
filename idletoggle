@@ -1,0 +1,139 @@
+-- LocalScript - FORCE IDLE ONLY (Fixed + Centered)
+-- Place in StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local IDLE_ANIM_ID = 507766388
+local idleAnim = Instance.new("Animation")
+idleAnim.AnimationId = "rbxassetid://" .. IDLE_ANIM_ID
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local animator = humanoid:WaitForChild("Animator")
+
+local idleTrack = nil
+local isForced = false
+local heartbeatConn = nil
+
+-- === GUI (centered by default) ===
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ForceIdleGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 180, 0, 60)
+button.Position = UDim2.new(0.5, -90, 0.5, -30)  -- Perfect center
+button.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+button.BorderSizePixel = 3
+button.BorderColor3 = Color3.fromRGB(255, 60, 60)
+button.Text = "FORCE IDLE: OFF"
+button.TextColor3 = Color3.fromRGB(255, 100, 100)
+button.Font = Enum.Font.GothamBold
+button.TextSize = 18
+button.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 16)
+corner.Parent = button
+
+-- Draggable
+local dragging = false
+local dragStart, startPos
+button.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = button.Position
+    end
+end)
+
+button.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        button.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- === FORCE IDLE ONLY ===
+local function enableForceIdle()
+    isForced = true
+    button.Text = "FORCE IDLE: ON"
+    button.TextColor3 = Color3.fromRGB(100, 255, 100)
+    button.BorderColor3 = Color3.fromRGB(50, 255, 50)
+
+    -- Play idle with highest priority
+    if idleTrack then idleTrack:Stop() end
+    idleTrack = animator:LoadAnimation(idleAnim)
+    idleTrack.Priority = Enum.AnimationPriority.Action4
+    idleTrack.Looped = true
+    idleTrack:Play()
+
+    -- Kill every other animation every frame
+    if heartbeatConn then heartbeatConn:Disconnect() end
+    heartbeatConn = RunService.Heartbeat:Connect(function()
+        for _, track in animator:GetPlayingAnimationTracks() do
+            if track ~= idleTrack and track.IsPlaying then
+                track:Stop(0)
+            end
+        end
+    end)
+end
+
+-- === DISABLE FORCE IDLE (100% working) ===
+local function disableForceIdle()
+    isForced = false
+    button.Text = "FORCE IDLE: OFF"
+    button.TextColor3 = Color3.fromRGB(255, 100, 100)
+    button.BorderColor3 = Color3.fromRGB(255, 60, 60)
+
+    -- Stop the killer loop
+    if heartbeatConn then
+        heartbeatConn:Disconnect()
+        heartbeatConn = nil
+    end
+
+    -- Stop the idle animation
+    if idleTrack and idleTrack.IsPlaying then
+        idleTrack:Stop()
+    end
+end
+
+-- Toggle
+button.MouseButton1Click:Connect(function()
+    if isForced then
+        disableForceIdle()
+    else
+        enableForceIdle()
+    end
+end)
+
+-- Respawn handler
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    animator = humanoid:WaitForChild("Animator")
+
+    task.wait(1)
+
+    disableForceIdle()  -- Make sure it's off first
+    if isForced then
+        enableForceIdle()
+    end
+end)
+
+print("FORCE IDLE button loaded - Now centered and OFF works perfectly!")
