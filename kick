@@ -1,0 +1,41 @@
+--// Simple Kick Button (Bottom-Right, draggable, thick border)
+
+local player = game.Players.LocalPlayer
+
+-- GUI container
+local gui = Instance.new("ScreenGui")
+gui.Parent = game.CoreGui
+gui.ResetOnSpawn = false
+
+-- Outer Border (fat for dragging)
+local border = Instance.new("Frame", gui)
+border.Size = UDim2.new(0, 180, 0, 60)
+
+-- Bottom-right but slightly left (X = 1 - 180px, Y = 1 - 140px)
+border.Position = UDim2.new(1, -220, 1, -140)
+
+border.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+border.BorderSizePixel = 4
+border.Active = true
+border.Draggable = true
+
+local corner = Instance.new("UICorner", border)
+corner.CornerRadius = UDim.new(0, 12)
+
+-- Inner button
+local kickBtn = Instance.new("TextButton", border)
+kickBtn.Size = UDim2.new(1, -10, 1, -10)
+kickBtn.Position = UDim2.new(0, 5, 0, 5)
+kickBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+kickBtn.Text = "KICK"
+kickBtn.Font = Enum.Font.GothamBold
+kickBtn.TextScaled = true
+kickBtn.TextColor3 = Color3.new(1,1,1)
+
+local corner2 = Instance.new("UICorner", kickBtn)
+corner2.CornerRadius = UDim.new(0, 10)
+
+-- Click = Kick
+kickBtn.MouseButton1Click:Connect(function()
+    player:Kick("You kicked yourself.")
+end)
