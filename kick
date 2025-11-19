@@ -1,41 +1,58 @@
---// Simple Kick Button (Bottom-Right, draggable, thick border)
+--// 100% Working Kick Button (Auto-Exec Safe, retry system)
 
-local player = game.Players.LocalPlayer
+task.spawn(function()
+    repeat task.wait() until game:IsLoaded()
 
--- GUI container
-local gui = Instance.new("ScreenGui")
-gui.Parent = game.CoreGui
-gui.ResetOnSpawn = false
+    local player = game.Players.LocalPlayer
 
--- Outer Border (fat for dragging)
-local border = Instance.new("Frame", gui)
-border.Size = UDim2.new(0, 180, 0, 60)
+    -- Safe parent function (CoreGui first, fallback to PlayerGui)
+    local function safeParent()
+        local ok, gui = pcall(function()
+            local g = Instance.new("ScreenGui")
+            g.Parent = game:GetService("CoreGui")
+            return g
+        end)
+        if ok then return gui end
+        
+        -- fallback
+        return Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+    end
 
--- Bottom-right but slightly left (X = 1 - 180px, Y = 1 - 140px)
-border.Position = UDim2.new(1, -220, 1, -140)
+    -- Create GUI (retry up to 10 times)
+    local gui
+    for i = 1, 10 do
+        gui = safeParent()
+        if gui then break end
+        task.wait(0.2)
+    end
 
-border.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-border.BorderSizePixel = 4
-border.Active = true
-border.Draggable = true
+    if not gui then return end -- Should never happen but safety
+    gui.ResetOnSpawn = false
 
-local corner = Instance.new("UICorner", border)
-corner.CornerRadius = UDim.new(0, 12)
+    -- Outer draggable border
+    local border = Instance.new("Frame", gui)
+    border.Size = UDim2.new(0, 180, 0, 60)
+    border.Position = UDim2.new(1, -220, 1, -140) -- Bottom-right but a bit left
+    border.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    border.BorderSizePixel = 4
+    border.Active = true
+    border.Draggable = true
 
--- Inner button
-local kickBtn = Instance.new("TextButton", border)
-kickBtn.Size = UDim2.new(1, -10, 1, -10)
-kickBtn.Position = UDim2.new(0, 5, 0, 5)
-kickBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-kickBtn.Text = "KICK"
-kickBtn.Font = Enum.Font.GothamBold
-kickBtn.TextScaled = true
-kickBtn.TextColor3 = Color3.new(1,1,1)
+    Instance.new("UICorner", border).CornerRadius = UDim.new(0, 12)
 
-local corner2 = Instance.new("UICorner", kickBtn)
-corner2.CornerRadius = UDim.new(0, 10)
+    -- Inner red button
+    local kickBtn = Instance.new("TextButton", border)
+    kickBtn.Size = UDim2.new(1, -10, 1, -10)
+    kickBtn.Position = UDim2.new(0, 5, 0, 5)
+    kickBtn.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+    kickBtn.Text = "KICK"
+    kickBtn.Font = Enum.Font.GothamBold
+    kickBtn.TextScaled = true
+    kickBtn.TextColor3 = Color3.new(1,1,1)
+    Instance.new("UICorner", kickBtn).CornerRadius = UDim.new(0, 10)
 
--- Click = Kick
-kickBtn.MouseButton1Click:Connect(function()
-    player:Kick("You kicked yourself.")
+    -- Kick on click
+    kickBtn.MouseButton1Click:Connect(function()
+        player:Kick("You kicked yourself.")
+    end)
 end)
