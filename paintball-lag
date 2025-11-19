@@ -1,4 +1,4 @@
---// HUB: Spam Tools v2 + Auto Laser + Spam Laser + Tool Toggles + Spin
+--// HUB: Spam Tools v2 + Auto Laser + Spam Laser + Tool Toggles + Spin (fixed)
 local player = game.Players.LocalPlayer
 local players = game.Players
 local rs = game:GetService("RunService")
@@ -20,10 +20,12 @@ hub.Draggable = true
 hub.BorderSizePixel = 0
 Instance.new("UICorner", hub).CornerRadius = UDim.new(0,15)
 
--- Tool toggles
-local toolToggles = {Megaphone=false, RageTable=false, BeeLauncher=false}
+-- Ordered tool list (keys must match actual tool names used in equipAndSpam)
+local toolNamesOrdered = {"Megaphone", "Rage Table", "Bee Launcher"}
+local toolToggles = {["Megaphone"]=false, ["Rage Table"]=false, ["Bee Launcher"]=false}
+
 local yPos = 10
-for tool,_ in pairs(toolToggles) do
+for _, tool in ipairs(toolNamesOrdered) do
     local btnToggle = Instance.new("TextButton", hub)
     btnToggle.Size = UDim2.new(1, -20, 0, 30)
     btnToggle.Position = UDim2.new(0, 10, 0, yPos)
@@ -86,7 +88,7 @@ local spamLaserConn
 -- RGB Fade
 local t = 0
 rs.RenderStepped:Connect(function(dt)
-    t += dt*2
+    t = t + dt*2
     local alpha = (math.sin(t)+1)/2
     btn.BackgroundColor3 = Color3.fromRGB(math.floor(0 + 155*alpha),0,math.floor(0 + 255*alpha))
 
@@ -106,9 +108,9 @@ end)
 -- RETURNS nearest player's __HITBOX
 local function getNearestHitbox()
     local char = player.Character
-    if not char then return end
+    if not char then return nil end
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    if not root then return nil end
 
     local nearestDist = math.huge
     local target = nil
@@ -116,7 +118,7 @@ local function getNearestHitbox()
     for _, plr in ipairs(players:GetPlayers()) do
         if plr ~= player and plr.Character then
             local hb = plr.Character:FindFirstChild("__HITBOX")
-            if hb then
+            if hb and hb:IsA("BasePart") then
                 local dist = (hb.Position - root.Position).Magnitude
                 if dist < nearestDist then
                     nearestDist = dist
@@ -129,7 +131,7 @@ local function getNearestHitbox()
     return target
 end
 
--- Equip + spam helper
+-- Equip + spam helper (keeps behavior, used for the intro sequence)
 local function equipAndSpam(toolName,duration)
     local char = player.Character
     if not char then return end
@@ -138,35 +140,103 @@ local function equipAndSpam(toolName,duration)
     local backpack = player:FindFirstChildOfClass("Backpack")
     local tool = char:FindFirstChild(toolName) or (backpack and backpack:FindFirstChild(toolName))
     if not tool then return end
-    if tool.Parent ~= char then hum:EquipTool(tool) end
+    if tool.Parent ~= char then
+        pcall(function() hum:EquipTool(tool) end)
+    end
 
     local start = tick()
     while tick() - start < duration do
-        if tool.Parent ~= char then hum:EquipTool(tool) end
-        tool:Activate()
+        if tool.Parent ~= char then
+            pcall(function() hum:EquipTool(tool) end)
+        end
+        pcall(function() tool:Activate() end)
         task.wait(0.01)
     end
 end
 
+
+-- ================================================================
+-- === PAINTBALL GUN ALWAYS-EQUIPPED SYSTEM (ON ONLY) ============
+-- ================================================================
+
+local function stopPaintballEquip()
+    for _, v in pairs({"Conn","CharConn","BpAdd","BpRem"}) do
+        local key = "_pg"..v
+        if _G[key] then
+            pcall(function() _G[key]:Disconnect() end)
+            _G[key] = nil
+        end
+    end
+    _G._pgLast = nil
+end
+
+local function startPaintballEquip()
+    stopPaintballEquip()
+
+    local function pgEquip()
+        local char = player.Character
+        local bp = player:FindFirstChild("Backpack")
+        if not char or not bp then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+
+        local tool = bp:FindFirstChild("Paintball Gun") or char:FindFirstChild("Paintball Gun")
+        if tool and tool.Parent ~= char then
+            pcall(function() hum:EquipTool(tool) end)
+        end
+    end
+
+    -- Heartbeat re-equip (shorter interval so equip delay is minimized)
+    _G._pgConn = rs.Heartbeat:Connect(function()
+        if tick() - (_G._pgLast or 0) >= 0.15 then
+            _G._pgLast = tick()
+            pgEquip()
+        end
+    end)
+
+    -- Re-equip after respawn
+    _G._pgCharConn = player.CharacterAdded:Connect(function()
+        task.wait(0.35)
+        pgEquip()
+    end)
+
+    -- Monitor backpack changes
+    local bp = player:FindFirstChild("Backpack")
+    if bp then
+        _G._pgBpAdd = bp.ChildAdded:Connect(pgEquip)
+        _G._pgBpRem = bp.ChildRemoved:Connect(pgEquip)
+    end
+
+    -- First equip immediately
+    pgEquip()
+end
+
+
 -- Paintball spam loop
 local function startLoop()
     if loopConn then loopConn:Disconnect() end
+
+    -- Activate always-equip system while loop active
+    startPaintballEquip()
+
     loopConn = rs.Heartbeat:Connect(function()
         if not enabled then return end
+
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not hum then return end
 
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        local paint = char:FindFirstChild("Paintball Gun") or (backpack and backpack:FindFirstChild("Paintball Gun"))
+        local bp = player:FindFirstChild("Backpack")
+        local paint = char:FindFirstChild("Paintball Gun") or (bp and bp:FindFirstChild("Paintball Gun"))
         if not paint then return end
 
-        if paint.Parent ~= char then hum:EquipTool(paint) end
-        paint:Activate()
+        -- paint is already being kept equipped by startPaintballEquip
+        pcall(function() paint:Activate() end)
 
         local hb = getNearestHitbox()
         if hb then
-            remote:FireServer(hb.Position, hb)
+            pcall(function() remote:FireServer(hb.Position, hb) end)
         end
     end)
 end
@@ -215,22 +285,34 @@ btn.MouseButton1Click:Connect(function()
         btn.Text = "Spam Tools v2 [ON]"
         local anyTools =
             toolToggles["Megaphone"] or
-            toolToggles["RageTable"] or
-            toolToggles["BeeLauncher"]
+            toolToggles["Rage Table"] or
+            toolToggles["Bee Launcher"]
 
         if anyTools then
             task.spawn(function()
                 if toolToggles["Megaphone"] then equipAndSpam("Megaphone",0.2) end
-                if toolToggles["RageTable"] then equipAndSpam("Rage Table",0.5) end
-                if toolToggles["BeeLauncher"] then equipAndSpam("Bee Launcher",0.5) end
+                if toolToggles["Rage Table"] then equipAndSpam("Rage Table",0.5) end
+                if toolToggles["Bee Launcher"] then equipAndSpam("Bee Launcher",0.5) end
             end)
-            task.delay(0, startLoop)
+            -- start paintball loop immediately (no artificial extra delay)
+            startLoop()
         else
+            -- No tools selected, start Paintball spam immediately
             startLoop()
         end
     else
         btn.Text = "Spam Tools v2 [OFF]"
         if loopConn then loopConn:Disconnect() end
+
+        -- Turn off always-equip system
+        stopPaintballEquip()
+
+        -- Unequip everything (prevent forced equip when off)
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then pcall(function() hum:UnequipTools() end) end
+        end
     end
 end)
 
@@ -248,23 +330,23 @@ notifFolder.ChildAdded:Connect(function(child)
     task.wait(0.05)
     local textLabel = child:FindFirstChildWhichIsA("TextLabel")
     if textLabel and textLabel.Text:match("Someone is stealing your") then
-        
+
         -- Equip laser
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
             local cape = char:FindFirstChild("Laser Cape") or player.Backpack:FindFirstChild("Laser Cape")
-            if cape then hum:EquipTool(cape) end
+            if cape then pcall(function() hum:EquipTool(cape) end) end
         end
-        
+
         local hb = getNearestHitbox()
         if hb then
-            remote:FireServer(hb.Position, hb)
+            pcall(function() remote:FireServer(hb.Position, hb) end)
         end
 
         -- Auto Laser unequips
         task.wait(0.1)
-        if hum then hum:UnequipTools() end
+        if hum then pcall(function() hum:UnequipTools() end) end
     end
 end)
 
@@ -279,15 +361,15 @@ spamLaserBtn.MouseButton1Click:Connect(function()
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
             local cape = char:FindFirstChild("Laser Cape") or player.Backpack:FindFirstChild("Laser Cape")
-            if cape then hum:EquipTool(cape) end
+            if cape then pcall(function() hum:EquipTool(cape) end) end
         end
-        
+
         -- Start spamming
         spamLaserConn = rs.Heartbeat:Connect(function()
             if not spamLaser then return end
             local hb = getNearestHitbox()
             if hb then
-                remote:FireServer(hb.Position, hb)
+                pcall(function() remote:FireServer(hb.Position, hb) end)
             end
         end)
     else
