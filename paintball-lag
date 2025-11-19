@@ -1,9 +1,8 @@
---// HUB: Spam Tools v2 + Auto Laser + Tool Toggles + Spin
+--// HUB: Spam Tools v2 + Auto Laser + Spam Laser + Tool Toggles + Spin
 local player = game.Players.LocalPlayer
 local players = game.Players
 local rs = game:GetService("RunService")
 local replicated = game:GetService("ReplicatedStorage")
-local workspace = game:GetService("Workspace")
 
 local remote = replicated:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RE/UseItem")
 
@@ -13,7 +12,7 @@ gui.ResetOnSpawn = false
 
 -- Hub Frame
 local hub = Instance.new("Frame", gui)
-hub.Size = UDim2.new(0, 220, 0, 200)
+hub.Size = UDim2.new(0, 220, 0, 260)
 hub.Position = UDim2.new(0.7, 0, 0.25, 0)
 hub.BackgroundColor3 = Color3.fromRGB(0,0,0)
 hub.Active = true
@@ -51,14 +50,14 @@ btn.TextColor3 = Color3.new(1,1,1)
 btn.Font = Enum.Font.GothamBold
 btn.TextScaled = true
 Instance.new("UICorner", btn).CornerRadius = UDim.new(0,12)
-yPos = yPos + 60
+yPos += 60
 
 local enabled = false
 local loopConn
 
 -- Auto Laser Button
 local laserBtn = Instance.new("TextButton", hub)
-laserBtn.Size = UDim2.new(1, -20, 0, 50)
+laserBtn.Size = UDim2.new(1, -20, 0, 40)
 laserBtn.Position = UDim2.new(0, 10, 0, yPos)
 laserBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
 laserBtn.Text = "Auto Laser [OFF]"
@@ -66,43 +65,71 @@ laserBtn.TextColor3 = Color3.new(1,1,1)
 laserBtn.Font = Enum.Font.GothamBold
 laserBtn.TextScaled = true
 Instance.new("UICorner", laserBtn).CornerRadius = UDim.new(0,12)
+yPos += 50
 
 local laserEnabled = false
+
+-- Spam Laser Button
+local spamLaserBtn = Instance.new("TextButton", hub)
+spamLaserBtn.Size = UDim2.new(1, -20, 0, 40)
+spamLaserBtn.Position = UDim2.new(0, 10, 0, yPos)
+spamLaserBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+spamLaserBtn.Text = "Spam Laser [OFF]"
+spamLaserBtn.TextColor3 = Color3.new(1,1,1)
+spamLaserBtn.Font = Enum.Font.GothamBold
+spamLaserBtn.TextScaled = true
+Instance.new("UICorner", spamLaserBtn).CornerRadius = UDim.new(0,12)
+
+local spamLaser = false
+local spamLaserConn
 
 -- RGB Fade
 local t = 0
 rs.RenderStepped:Connect(function(dt)
-    t = t + dt*2
+    t += dt*2
     local alpha = (math.sin(t)+1)/2
     btn.BackgroundColor3 = Color3.fromRGB(math.floor(0 + 155*alpha),0,math.floor(0 + 255*alpha))
-    laserBtn.BackgroundColor3 = laserEnabled and Color3.fromRGB(math.floor(0 + 155*alpha),0,math.floor(0 + 255*alpha)) or Color3.fromRGB(0,0,0)
+
+    if laserEnabled then
+        laserBtn.BackgroundColor3 = Color3.fromRGB(math.floor(0 + 155*alpha),0,math.floor(0 + 255*alpha))
+    else
+        laserBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    end
+
+    if spamLaser then
+        spamLaserBtn.BackgroundColor3 = Color3.fromRGB(math.floor(0 + 155*alpha),0,math.floor(0 + 255*alpha))
+    else
+        spamLaserBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    end
 end)
 
--- Find nearest player HRP
-local function getNearestPlayerHrp()
+-- RETURNS nearest player's __HITBOX
+local function getNearestHitbox()
     local char = player.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
+
     local nearestDist = math.huge
-    local nearest = nil
+    local target = nil
+
     for _, plr in ipairs(players:GetPlayers()) do
         if plr ~= player and plr.Character then
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                local dist = (hrp.Position - root.Position).Magnitude
+            local hb = plr.Character:FindFirstChild("__HITBOX")
+            if hb then
+                local dist = (hb.Position - root.Position).Magnitude
                 if dist < nearestDist then
                     nearestDist = dist
-                    nearest = hrp
+                    target = hb
                 end
             end
         end
     end
-    return nearest
+
+    return target
 end
 
--- Equip and spam tool
+-- Equip + spam helper
 local function equipAndSpam(toolName,duration)
     local char = player.Character
     if not char then return end
@@ -112,6 +139,7 @@ local function equipAndSpam(toolName,duration)
     local tool = char:FindFirstChild(toolName) or (backpack and backpack:FindFirstChild(toolName))
     if not tool then return end
     if tool.Parent ~= char then hum:EquipTool(tool) end
+
     local start = tick()
     while tick() - start < duration do
         if tool.Parent ~= char then hum:EquipTool(tool) end
@@ -126,19 +154,19 @@ local function startLoop()
     loopConn = rs.Heartbeat:Connect(function()
         if not enabled then return end
         local char = player.Character
-        if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not hum then return end
+
         local backpack = player:FindFirstChildOfClass("Backpack")
         local paint = char:FindFirstChild("Paintball Gun") or (backpack and backpack:FindFirstChild("Paintball Gun"))
-        if paint then
-            if paint.Parent ~= char then hum:EquipTool(paint) end
-            paint:Activate()
-            local nearest = getNearestPlayerHrp()
-            if nearest then
-                local pos = nearest.Position
-                remote:FireServer(Vector3.new(pos.X,pos.Y,pos.Z))
-            end
+        if not paint then return end
+
+        if paint.Parent ~= char then hum:EquipTool(paint) end
+        paint:Activate()
+
+        local hb = getNearestHitbox()
+        if hb then
+            remote:FireServer(hb.Position, hb)
         end
     end)
 end
@@ -148,28 +176,30 @@ local function applySpin(state)
     local function stop()
         local char = player.Character
         if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-        if root then
-            local s = root:FindFirstChild("Spinning")
-            if s then s:Destroy() end
-        end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local s = root:FindFirstChild("Spinning")
+        if s then s:Destroy() end
     end
+
     if not state then stop(); return end
 
     local SPEED = 20
     local function apply()
         local char = player.Character
         if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+        local root = char:FindFirstChild("HumanoidRootPart")
         if not root then return end
         local old = root:FindFirstChild("Spinning")
         if old then old:Destroy() end
+
         local spin = Instance.new("BodyAngularVelocity")
         spin.Name = "Spinning"
         spin.Parent = root
-        spin.MaxTorque = Vector3.new(0,math.huge,0)
-        spin.AngularVelocity = Vector3.new(0,SPEED,0)
+        spin.MaxTorque = Vector3.new(0, math.huge, 0)
+        spin.AngularVelocity = Vector3.new(0, SPEED, 0)
     end
+
     apply()
     player.CharacterAdded:Connect(function()
         task.wait(0.1)
@@ -183,20 +213,19 @@ btn.MouseButton1Click:Connect(function()
     applySpin(enabled)
     if enabled then
         btn.Text = "Spam Tools v2 [ON]"
-        
-        local anyTools = toolToggles["Megaphone"] or toolToggles["RageTable"] or toolToggles["BeeLauncher"]
+        local anyTools =
+            toolToggles["Megaphone"] or
+            toolToggles["RageTable"] or
+            toolToggles["BeeLauncher"]
 
         if anyTools then
-            -- Run selected tools first
             task.spawn(function()
                 if toolToggles["Megaphone"] then equipAndSpam("Megaphone",0.2) end
                 if toolToggles["RageTable"] then equipAndSpam("Rage Table",0.5) end
                 if toolToggles["BeeLauncher"] then equipAndSpam("Bee Launcher",0.5) end
             end)
-            -- Start Paintball spam after 1 second
             task.delay(0, startLoop)
         else
-            -- No tools selected, start Paintball spam immediately
             startLoop()
         end
     else
@@ -208,40 +237,60 @@ end)
 -- Auto Laser toggle
 laserBtn.MouseButton1Click:Connect(function()
     laserEnabled = not laserEnabled
-    laserBtn.Text = "Auto Laser ["..(laserEnabled and "ON" or "OFF").."]"
+    laserBtn.Text = "Auto Laser [" .. (laserEnabled and "ON" or "OFF") .. "]"
 end)
 
 -- Auto Laser logic
 local notifFolder = player:WaitForChild("PlayerGui"):WaitForChild("Notification"):WaitForChild("Notification")
 notifFolder.ChildAdded:Connect(function(child)
     if not laserEnabled then return end
+
     task.wait(0.05)
     local textLabel = child:FindFirstChildWhichIsA("TextLabel")
     if textLabel and textLabel.Text:match("Someone is stealing your") then
+        
+        -- Equip laser
         local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local backpack = player:FindFirstChildOfClass("Backpack")
-            local cape = char:FindFirstChild("Laser Cape") or (backpack and backpack:FindFirstChild("Laser Cape"))
-            if cape and cape.Parent ~= char and hum then
-                hum:EquipTool(cape)
-            end
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local cape = char:FindFirstChild("Laser Cape") or player.Backpack:FindFirstChild("Laser Cape")
+            if cape then hum:EquipTool(cape) end
         end
-        local nearest = getNearestPlayerHrp()
-        if nearest and nearest.Parent then
-            local upper = nearest.Parent:FindFirstChild("UpperTorso")
-            if upper then
-                local args = {Vector3.new(upper.Position.X, upper.Position.Y, upper.Position.Z), upper}
-                remote:FireServer(unpack(args))
-            end
+        
+        local hb = getNearestHitbox()
+        if hb then
+            remote:FireServer(hb.Position, hb)
         end
-        -- Unequip Laser Cape
+
+        -- Auto Laser unequips
         task.wait(0.1)
+        if hum then hum:UnequipTools() end
+    end
+end)
+
+-- Spam Laser toggle
+spamLaserBtn.MouseButton1Click:Connect(function()
+    spamLaser = not spamLaser
+    spamLaserBtn.Text = "Spam Laser [" .. (spamLaser and "ON" or "OFF") .. "]"
+
+    if spamLaser then
+        -- Equip cape immediately
         local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local cape = char:FindFirstChild("Laser Cape")
-            if cape and hum then hum:UnequipTools() end
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local cape = char:FindFirstChild("Laser Cape") or player.Backpack:FindFirstChild("Laser Cape")
+            if cape then hum:EquipTool(cape) end
         end
+        
+        -- Start spamming
+        spamLaserConn = rs.Heartbeat:Connect(function()
+            if not spamLaser then return end
+            local hb = getNearestHitbox()
+            if hb then
+                remote:FireServer(hb.Position, hb)
+            end
+        end)
+    else
+        if spamLaserConn then spamLaserConn:Disconnect() end
     end
 end)
