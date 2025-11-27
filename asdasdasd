@@ -459,6 +459,77 @@ end)
     end)
 end)
 
+
+makeBtn("Fps Devour v3", 20, function(state)
+    if not state then
+        -- turn OFF (no loop so nothing to clean)
+        return
+    end
+
+    task.spawn(function()
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local replicated = game:GetService("ReplicatedStorage")
+
+        local player = Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local backpack = player:WaitForChild("Backpack")
+
+        local toolName1 = "Quantum Cloner"
+        local toolName2 = "Glitched Slap"
+
+        -- wait for a tool to exist in backpack
+        local function waitForTool(name)
+            local tool = backpack:FindFirstChild(name)
+            while not tool do
+                backpack.ChildAdded:Wait()
+                tool = backpack:FindFirstChild(name)
+            end
+            return tool
+        end
+
+        -- main logic
+        local function equipBothAndClone()
+            local cloner = waitForTool(toolName1)
+            local slap = waitForTool(toolName2)
+
+            -- place both tools into character (equips them)
+            cloner.Parent = character
+            slap.Parent = character
+
+            -- wait 2 frames
+            RunService.RenderStepped:Wait()
+            RunService.RenderStepped:Wait()
+
+            -- fire cloner click
+            pcall(function()
+                replicated:WaitForChild("Packages")
+                :WaitForChild("Net")
+                :WaitForChild("RE/UseItem")
+                :FireServer()
+            end)
+
+            -- detect tool switching and unequip both if player swaps tools
+            character.ChildAdded:Connect(function(child)
+                if child:IsA("Tool") then
+                    local t = character:FindFirstChildOfClass("Tool")
+                    if t and t.Name ~= toolName1 and t.Name ~= toolName2 then
+                        if cloner and cloner.Parent == character then
+                            cloner.Parent = backpack
+                        end
+                        if slap and slap.Parent == character then
+                            slap.Parent = backpack
+                        end
+                    end
+                end
+            end)
+        end
+
+        equipBothAndClone()
+    end)
+end)
+
+
 -- === MINI HUB BUTTON ===
 makeBtn("Flight", 80, function(state)
     local playerGui = player:FindFirstChild("PlayerGui")
