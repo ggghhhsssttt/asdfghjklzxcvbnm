@@ -327,7 +327,7 @@ local promptConn = game.Workspace.DescendantAdded:Connect(function(obj)
 	if obj:IsA("ProximityPrompt") then
 		obj.Triggered:Connect(function()
 			if autoBatEnabled then
-				task.wait(0.01)
+				task.wait(0.4)
 				local char = player.Character
 				if char then
 					local bat = equipBat()
