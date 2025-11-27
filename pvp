@@ -321,20 +321,12 @@ player.CharacterAdded:Connect(function(char)
 	end)
 end)
 
-
-local function connectPrompt(prompt)
-	-- When player starts holding the key
-	prompt.PromptButtonHoldBegan:Connect(function(playerWho)
-		if playerWho ~= player then return end
-		if not autoBatEnabled then return end
-
-		local hold = prompt.HoldDuration
-		-- If hold is shorter than 0.3, clamp it
-		local triggerTime = math.max(0, hold - 0.3)
-
-		task.delay(triggerTime, function()
-			-- Only activate if still holding
-			if prompt:IsDescendantOf(game) and prompt.Enabled then
+-- BAT BEFORE PROX PROMPT FINISHES
+local promptConn = game.Workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("ProximityPrompt") then
+		obj.Triggered:Connect(function()
+			if autoBatEnabled then
+				task.wait(0.1)
 				local char = player.Character
 				if char then
 					local bat = equipBat()
@@ -342,16 +334,8 @@ local function connectPrompt(prompt)
 				end
 			end
 		end)
-	end)
-end
-
--- Detect new prompts
-game.Workspace.DescendantAdded:Connect(function(obj)
-	if obj:IsA("ProximityPrompt") then
-		connectPrompt(obj)
 	end
 end)
-
 
 -- MAIN AUTO BAT LOOP (NO COOLDOWN)
 task.spawn(function()
