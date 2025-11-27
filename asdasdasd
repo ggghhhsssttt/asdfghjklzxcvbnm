@@ -501,13 +501,23 @@ makeBtn("Fps Devour v3", 20, function(state)
             RunService.RenderStepped:Wait()
             RunService.RenderStepped:Wait()
 
-            -- fire cloner click
-            pcall(function()
-                replicated:WaitForChild("Packages")
-                :WaitForChild("Net")
-                :WaitForChild("RE/UseItem")
-                :FireServer()
-            end)
+-- fire cloner click
+pcall(function()
+    replicated:WaitForChild("Packages")
+    :WaitForChild("Net")
+    :WaitForChild("RE/UseItem")
+    :FireServer()
+end)
+
+-- fire Quantum Cloner teleport event RIGHT AFTER
+pcall(function()
+    replicated:WaitForChild("Packages")
+    :WaitForChild("Net")
+    :WaitForChild("RE")
+    :WaitForChild("QuantumCloner")
+    :WaitForChild("OnTeleport")
+    :FireServer()
+end)
 
             -- detect tool switching and unequip both if player swaps tools
             character.ChildAdded:Connect(function(child)
