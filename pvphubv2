@@ -494,129 +494,121 @@ for _, plr in ipairs(Players:GetPlayers()) do
 	end)
 end
 
+-- ============================
+-- ANTI KNOCKBACK BUTTON
+-- ============================
+local antiKB_Enabled = false
+local antiKB_Conns = {}
 
--- ================================
--- ANTI KNOCKBACK TOGGLE HANDLER
--- ================================
-local antiKBConnections = {}
-local antiKBActive = false
+local function clearAntiKB()
+	for _, c in ipairs(antiKB_Conns) do
+		pcall(function() c:Disconnect() end)
+	end
+	antiKB_Conns = {}
+end
 
 local function enableAntiKB()
-    if antiKBActive then return end
-    antiKBActive = true
+	local plr = player
+	local char = plr.Character or plr.CharacterAdded:Wait()
+	local hum = char:WaitForChild("Humanoid")
+	local root = char:WaitForChild("HumanoidRootPart")
+	local RS = game:GetService("RunService")
+	local Rep = game:GetService("ReplicatedStorage")
+	local lastVel = Vector3.zero
 
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Workspace = game:GetService("Workspace")
+	local function isRagdolled()
+		local s = hum:GetState()
+		return s == Enum.HumanoidStateType.Physics
+			or s == Enum.HumanoidStateType.Ragdoll
+			or s == Enum.HumanoidStateType.FallingDown
+			or s == Enum.HumanoidStateType.GettingUp
+	end
 
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local hum = char:WaitForChild("Humanoid")
-    local root = char:WaitForChild("HumanoidRootPart")
-    local cam = Workspace.CurrentCamera
-    local lastVel = Vector3.zero
+	local function restore()
+		-- Remove ragdoll constraints / velocities
+		for _, d in ipairs(char:GetDescendants()) do
+			if d:IsA("BallSocketConstraint")
+			or d:IsA("HingeConstraint")
+			or d:IsA("NoCollisionConstraint")
+			or d:IsA("BodyVelocity")
+			or d:IsA("BodyAngularVelocity")
+			or d:IsA("BodyGyro")
+			or d:IsA("BodyPosition") then
+				d:Destroy()
+			end
+		end
 
-    local function isRagdolled()
-        local s = hum:GetState()
-        return s == Enum.HumanoidStateType.Physics 
-            or s == Enum.HumanoidStateType.Ragdoll 
-            or s == Enum.HumanoidStateType.FallingDown 
-            or s == Enum.HumanoidStateType.GettingUp
-    end
+		-- Re-enable M6Ds
+		for _, m in ipairs(char:GetDescendants()) do
+			if m:IsA("Motor6D") then
+				m.Enabled = true
+			end
+		end
 
-    local function restore()
-        pcall(function()
-            local pm = plr:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
-            require(pm):GetControls():Enable()
-        end)
+		-- Reset camera
+		pcall(function()
+			workspace.CurrentCamera.CameraSubject = hum
+		end)
+	end
 
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("BallSocketConstraint")
-            or d:IsA("NoCollisionConstraint")
-            or d:IsA("HingeConstraint")
-            or (d:IsA("Attachment") and (d.Name == "A" or d.Name == "B"))
-            or d:IsA("BodyVelocity")
-            or d:IsA("BodyPosition")
-            or d:IsA("BodyGyro") then
-                d:Destroy()
-            end
-        end
+	-- Stop bad states
+	table.insert(antiKB_Conns, hum.StateChanged:Connect(function(_, new)
+		if not antiKB_Enabled then return end
+		if isRagdolled() then
+			hum:ChangeState(Enum.HumanoidStateType.Running)
+			restore()
+			root.AssemblyLinearVelocity = Vector3.zero
+		end
+	end))
 
-        for _, m in ipairs(char:GetDescendants()) do
-            if m:IsA("Motor6D") then
-                m.Enabled = true
-            end
-        end
+	-- Stop incoming impulses
+	local ok, ev = pcall(function()
+		return Rep.Packages.Net["RE/CombatService/ApplyImpulse"].OnClientEvent
+	end)
+	if ok and ev then
+		table.insert(antiKB_Conns, ev:Connect(function()
+			if not antiKB_Enabled then return end
+			if isRagdolled() then
+				root.AssemblyLinearVelocity = Vector3.zero
+			end
+		end))
+	end
 
-        cam.CameraSubject = hum
-    end
+	-- Kill newly created ragdoll parts
+	table.insert(antiKB_Conns, char.DescendantAdded:Connect(function(d)
+		if not antiKB_Enabled then return end
+		if isRagdolled() then
+			restore()
+		end
+	end))
 
-    -- Prevent ragdoll state
-    table.insert(antiKBConnections, hum.StateChanged:Connect(function(_, _)
-        if not antiKBActive then return end
-        if isRagdolled() then
-            hum:ChangeState(Enum.HumanoidStateType.Running)
-            restore()
-        end
-    end))
+	-- Clamp velocity on Heartbeat
+	table.insert(antiKB_Conns, RS.Heartbeat:Connect(function()
+		if not antiKB_Enabled then return end
+		if isRagdolled() then
+			restore()
 
-    -- Stop impulse events
-    pcall(function()
-        table.insert(antiKBConnections,
-            ReplicatedStorage.Packages.Net["RE/CombatService/ApplyImpulse"].OnClientEvent:Connect(function()
-                if antiKBActive and isRagdolled() then
-                    root.AssemblyLinearVelocity = Vector3.zero
-                end
-            end)
-        )
-    end)
+			local vel = root.AssemblyLinearVelocity
+			if (vel - lastVel).Magnitude >= 40 and vel.Magnitude >= 25 then
+				root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
+			end
+			lastVel = vel
+		end
+	end))
 
-    -- Kill new ragdoll parts
-    table.insert(antiKBConnections, char.DescendantAdded:Connect(function(d)
-        if antiKBActive and isRagdolled() then
-            restore()
-        end
-    end))
-
-    -- Clamp velocity while KB is happening
-    table.insert(antiKBConnections, RunService.Heartbeat:Connect(function()
-        if not antiKBActive then return end
-
-        if isRagdolled() then
-            restore()
-
-            local vel = root.AssemblyLinearVelocity
-            if (vel - lastVel).Magnitude >= 40 and vel.Magnitude >= 25 then
-                root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
-            end
-            lastVel = vel
-        end
-    end))
-
-    restore()
+	restore()
 end
 
-local function disableAntiKB()
-    antiKBActive = false
-    for _, c in ipairs(antiKBConnections) do
-        c:Disconnect()
-    end
-    antiKBConnections = {}
-end
+makeToggleBtn("Anti Knockback", function(on)
+	antiKB_Enabled = on
 
--- Attach to toggle
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local state = vu26() -- reads the UI toggle state
-        if state and not antiKBActive then
-            enableAntiKB()
-        elseif not state and antiKBActive then
-            disableAntiKB()
-        end
-    end
+	if on then
+		enableAntiKB()
+	else
+		clearAntiKB()
+	end
 end)
+
 
 -- ============================
 -- TOGGLE FRIENDS (LEFT AS-IS, ALWAYS LAST)
