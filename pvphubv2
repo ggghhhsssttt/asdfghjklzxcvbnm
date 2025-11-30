@@ -295,6 +295,70 @@ makeToggleBtn("Auto Bat", function(on)
 end)
 
 
+
+-- ================================
+-- HITBOX EXPANDER (lightweight & forceful)
+-- ================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local hitboxActive = false
+local updateConnection
+
+local HITBOX_SIZE = Vector3.new(12, 12, 12)
+local NORMAL_SIZE = Vector3.new(2, 2, 1)
+
+-- Expand hitboxes for all other players
+local function expandHitboxes()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp.Size ~= HITBOX_SIZE then
+                hrp.Size = HITBOX_SIZE
+                hrp.Transparency = 0.4
+                hrp.Color = Color3.fromRGB(255, 255, 255)
+                hrp.Material = Enum.Material.SmoothPlastic
+                hrp.CanCollide = false
+            end
+        end
+    end
+end
+
+-- Reset hitboxes to default
+local function resetHitboxes()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.Size = NORMAL_SIZE
+                hrp.Transparency = 1
+                hrp.Material = Enum.Material.Plastic
+                hrp.CanCollide = true
+            end
+        end
+    end
+end
+
+-- Toggle function for the button
+local function toggleHitboxes(on)
+    hitboxActive = on
+    if updateConnection then
+        updateConnection:Disconnect()
+        updateConnection = nil
+    end
+
+    if hitboxActive then
+        updateConnection = RunService.RenderStepped:Connect(expandHitboxes)
+    else
+        resetHitboxes()
+    end
+end
+
+-- Hook into your UI button system
+makeToggleBtn("Hitbox Expander", toggleHitboxes)
+
+
 -- ============================
 -- FAST SLAP (one-time, with working BodyAngularVelocity rotation)
 -- ============================
@@ -425,188 +489,125 @@ makeToggleBtn("Fast Slap", function(on)
     fastSlapUsed = false
 end)
 
--- ============================
--- HITBOX EXPANDER
--- ============================
-local expanderEnabled = false
-local EXPAND_SIZE = Vector3.new(12.5, 12.5, 12.5)
-
-local function expandForCharacter(char)
-	if not char then return end
-	if char == player.Character then return end
-	local hb = char:FindFirstChild("__HITBOX")
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	local function applyTo(part)
-		if not part or not part:IsA("BasePart") then return end
-		pcall(function()
-			part.Size = EXPAND_SIZE
-			part.Transparency = 0.7
-			part.Color = Color3.fromRGB(200,0,255)
-			part.Material = Enum.Material.ForceField
-			part.CanCollide = false
-		end)
-	end
-	applyTo(hb)
-	applyTo(hrp)
-end
-
-local function applyExpanderToAll()
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr.Character then
-			expandForCharacter(plr.Character)
-		end
-	end
-end
-
--- keep it active with a light loop
-local expanderConn
-makeToggleBtn("Hitbox Expander", function(on)
-	expanderEnabled = on
-	if on then
-		applyExpanderToAll()
-		if expanderConn then expanderConn:Disconnect() end
-		expanderConn = RS.Heartbeat:Connect(function(dt)
-			-- only run once every 0.25s to reduce cost
-			expanderConn._acc = (expanderConn._acc or 0) + dt
-			if expanderConn._acc >= 0.25 then
-				expanderConn._acc = 0
-				applyExpanderToAll()
-			end
-		end)
-	else
-		if expanderConn then expanderConn:Disconnect() expanderConn = nil end
-		-- do not revert players' parts (could conflict), user can rejoin to reset
-	end
-end)
-
--- expand for new players' characters
-Players.PlayerAdded:Connect(function(plr)
-	plr.CharacterAdded:Connect(function(char)
-		task.wait(0.35)
-		if expanderEnabled then expandForCharacter(char) end
-	end)
-end)
--- if players already present
-for _, plr in ipairs(Players:GetPlayers()) do
-	plr.CharacterAdded:Connect(function(char)
-		task.wait(0.35)
-		if expanderEnabled then expandForCharacter(char) end
-	end)
-end
-
--- ============================
--- ANTI KNOCKBACK BUTTON
--- ============================
-local antiKB_Enabled = false
-local antiKB_Conns = {}
-
-local function clearAntiKB()
-	for _, c in ipairs(antiKB_Conns) do
-		pcall(function() c:Disconnect() end)
-	end
-	antiKB_Conns = {}
-end
+-- ================================
+-- ANTI KNOCKBACK TOGGLE BUTTON
+-- ================================
+local antiKBConnections = {}
+local antiKBActive = false
 
 local function enableAntiKB()
-	local plr = player
-	local char = plr.Character or plr.CharacterAdded:Wait()
-	local hum = char:WaitForChild("Humanoid")
-	local root = char:WaitForChild("HumanoidRootPart")
-	local RS = game:GetService("RunService")
-	local Rep = game:GetService("ReplicatedStorage")
-	local lastVel = Vector3.zero
+    if antiKBActive then return end
+    antiKBActive = true
 
-	local function isRagdolled()
-		local s = hum:GetState()
-		return s == Enum.HumanoidStateType.Physics
-			or s == Enum.HumanoidStateType.Ragdoll
-			or s == Enum.HumanoidStateType.FallingDown
-			or s == Enum.HumanoidStateType.GettingUp
-	end
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Workspace = game:GetService("Workspace")
 
-	local function restore()
-		-- Remove ragdoll constraints / velocities
-		for _, d in ipairs(char:GetDescendants()) do
-			if d:IsA("BallSocketConstraint")
-			or d:IsA("HingeConstraint")
-			or d:IsA("NoCollisionConstraint")
-			or d:IsA("BodyVelocity")
-			or d:IsA("BodyAngularVelocity")
-			or d:IsA("BodyGyro")
-			or d:IsA("BodyPosition") then
-				d:Destroy()
-			end
-		end
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+    local root = char:WaitForChild("HumanoidRootPart")
+    local cam = Workspace.CurrentCamera
+    local lastVel = Vector3.zero
 
-		-- Re-enable M6Ds
-		for _, m in ipairs(char:GetDescendants()) do
-			if m:IsA("Motor6D") then
-				m.Enabled = true
-			end
-		end
+    local function isRagdolled()
+        local s = hum:GetState()
+        return s == Enum.HumanoidStateType.Physics 
+            or s == Enum.HumanoidStateType.Ragdoll 
+            or s == Enum.HumanoidStateType.FallingDown 
+            or s == Enum.HumanoidStateType.GettingUp
+    end
 
-		-- Reset camera
-		pcall(function()
-			workspace.CurrentCamera.CameraSubject = hum
-		end)
-	end
+    local function restore()
+        pcall(function()
+            local pm = plr:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
+            require(pm):GetControls():Enable()
+        end)
 
-	-- Stop bad states
-	table.insert(antiKB_Conns, hum.StateChanged:Connect(function(_, new)
-		if not antiKB_Enabled then return end
-		if isRagdolled() then
-			hum:ChangeState(Enum.HumanoidStateType.Running)
-			restore()
-			root.AssemblyLinearVelocity = Vector3.zero
-		end
-	end))
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BallSocketConstraint")
+            or d:IsA("NoCollisionConstraint")
+            or d:IsA("HingeConstraint")
+            or (d:IsA("Attachment") and (d.Name == "A" or d.Name == "B"))
+            or d:IsA("BodyVelocity")
+            or d:IsA("BodyPosition")
+            or d:IsA("BodyGyro") then
+                d:Destroy()
+            end
+        end
 
-	-- Stop incoming impulses
-	local ok, ev = pcall(function()
-		return Rep.Packages.Net["RE/CombatService/ApplyImpulse"].OnClientEvent
-	end)
-	if ok and ev then
-		table.insert(antiKB_Conns, ev:Connect(function()
-			if not antiKB_Enabled then return end
-			if isRagdolled() then
-				root.AssemblyLinearVelocity = Vector3.zero
-			end
-		end))
-	end
+        for _, m in ipairs(char:GetDescendants()) do
+            if m:IsA("Motor6D") then
+                m.Enabled = true
+            end
+        end
 
-	-- Kill newly created ragdoll parts
-	table.insert(antiKB_Conns, char.DescendantAdded:Connect(function(d)
-		if not antiKB_Enabled then return end
-		if isRagdolled() then
-			restore()
-		end
-	end))
+        cam.CameraSubject = hum
+    end
 
-	-- Clamp velocity on Heartbeat
-	table.insert(antiKB_Conns, RS.Heartbeat:Connect(function()
-		if not antiKB_Enabled then return end
-		if isRagdolled() then
-			restore()
+    -- Prevent ragdoll state
+    table.insert(antiKBConnections, hum.StateChanged:Connect(function(_, _)
+        if not antiKBActive then return end
+        if isRagdolled() then
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+            restore()
+        end
+    end))
 
-			local vel = root.AssemblyLinearVelocity
-			if (vel - lastVel).Magnitude >= 40 and vel.Magnitude >= 25 then
-				root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
-			end
-			lastVel = vel
-		end
-	end))
+    -- Stop impulse events
+    pcall(function()
+        table.insert(antiKBConnections,
+            ReplicatedStorage.Packages.Net["RE/CombatService/ApplyImpulse"].OnClientEvent:Connect(function()
+                if antiKBActive and isRagdolled() then
+                    root.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+        )
+    end)
 
-	restore()
+    -- Kill new ragdoll parts
+    table.insert(antiKBConnections, char.DescendantAdded:Connect(function(d)
+        if antiKBActive and isRagdolled() then
+            restore()
+        end
+    end))
+
+    -- Clamp velocity while KB is happening
+    table.insert(antiKBConnections, RunService.Heartbeat:Connect(function()
+        if not antiKBActive then return end
+
+        if isRagdolled() then
+            restore()
+
+            local vel = root.AssemblyLinearVelocity
+            if (vel - lastVel).Magnitude >= 40 and vel.Magnitude >= 25 then
+                root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
+            end
+            lastVel = vel
+        end
+    end))
+
+    restore()
 end
 
-makeToggleBtn("Anti Knockback", function(on)
-	antiKB_Enabled = on
+local function disableAntiKB()
+    antiKBActive = false
+    for _, c in ipairs(antiKBConnections) do
+        c:Disconnect()
+    end
+    antiKBConnections = {}
+end
 
-	if on then
-		enableAntiKB()
-	else
-		clearAntiKB()
-	end
+-- ================================
+-- Create the UI button
+-- ================================
+makeToggleBtn("Anti Knockback", function(on)
+    if on then
+        enableAntiKB()
+    else
+        disableAntiKB()
+    end
 end)
 
 
