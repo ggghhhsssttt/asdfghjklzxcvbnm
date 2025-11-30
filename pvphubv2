@@ -112,7 +112,7 @@ local function enableBoost()
 	if not hrp or not hum then return end
 
 	hum.PlatformStand = false
-	local speed, vertical = 29, 65
+	local speed, vertical = 27.1, 65
 	boostConn = RS.Heartbeat:Connect(function()
 		if not hrp or not hum then return end
 		local moveDir = hum.MoveDirection
