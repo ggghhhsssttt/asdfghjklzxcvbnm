@@ -1,1 +1,560 @@
+--// HUB: Fixed, auto-resizing buttons using makeToggleBtn (Toggle Friends left intact)
+local player = game.Players.LocalPlayer
+local RS = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 
+-- wait for PlayerGui
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Root GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "MiniHub"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+-- Window
+local window = Instance.new("Frame")
+window.Size = UDim2.new(0, 300, 0, 60)
+window.Position = UDim2.new(0, 10, 0.5, -150)
+window.BackgroundColor3 = Color3.fromRGB(40,40,40)
+window.Active = true
+window.Draggable = true
+window.Parent = gui
+Instance.new("UICorner", window).CornerRadius = UDim.new(0,12)
+
+-- Title + Close
+local title = Instance.new("TextLabel", window)
+title.Size = UDim2.new(1, -40, 0, 30)
+title.Position = UDim2.new(0,10,0,5)
+title.BackgroundTransparency = 1
+title.Text = "fuwatti's pvp helper"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+
+local close = Instance.new("TextButton", window)
+close.Size = UDim2.new(0,25,0,25)
+close.Position = UDim2.new(1, -33, 0, 8)
+close.BackgroundColor3 = Color3.fromRGB(220,50,50)
+close.Text = "X"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 16
+Instance.new("UICorner", close).CornerRadius = UDim.new(0,6)
+close.MouseButton1Click:Connect(function() gui:Destroy() end)
+
+-- Button container with layout so buttons auto-readjust
+local buttonContainer = Instance.new("Frame", window)
+buttonContainer.Name = "ButtonContainer"
+buttonContainer.Size = UDim2.new(1, -20, 0, 0)
+buttonContainer.Position = UDim2.new(0, 10, 0, 40)
+buttonContainer.BackgroundTransparency = 1
+
+local UIList = Instance.new("UIListLayout", buttonContainer)
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0,6)
+
+local function resizeHub()
+	task.spawn(function()
+		-- small wait ensures UIList updates AbsoluteContentSize
+		task.wait()
+		local h = UIList.AbsoluteContentSize.Y
+		buttonContainer.Size = UDim2.new(1, -20, 0, h)
+		window.Size = UDim2.new(0, 300, 0, math.clamp(h + 60, 120, 900))
+	end)
+end
+UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resizeHub)
+
+-- Universal toggle button creator
+local function makeToggleBtn(name, callback)
+	local state = false
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.Size = UDim2.new(1, 0, 0, 35)
+	btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	btn.Text = name .. " [OFF]"
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.Parent = buttonContainer
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+
+	btn.MouseButton1Click:Connect(function()
+		state = not state
+		btn.Text = name .. (state and " [ON]" or " [OFF]")
+		btn.BackgroundColor3 = state and Color3.fromRGB(50,150,50) or Color3.fromRGB(60,60,60)
+		-- run callback in a separate thread to avoid blocking UI
+		task.spawn(function()
+			pcall(function() callback(state) end)
+		end)
+	end)
+
+	-- ensure resizing when created
+	resizeHub()
+	return btn
+end
+
+-- ============================
+-- IMPLEMENTED FEATURES
+-- ============================
+
+-- BOOST (flight->rename to Boost, mechanics unchanged)
+local boostConn = nil
+local function enableBoost()
+	disableBoost() -- ensure no double connections
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local hum = char:FindFirstChild("Humanoid")
+	if not hrp or not hum then return end
+
+	hum.PlatformStand = false
+	local speed, vertical = 29, 65
+	boostConn = RS.Heartbeat:Connect(function()
+		if not hrp or not hum then return end
+		local moveDir = hum.MoveDirection
+		local vel = Vector3.new(moveDir.X * speed, 0, moveDir.Z * speed)
+		if hum.Jump then
+			vel += Vector3.new(0, vertical, 0)
+		elseif UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+			vel += Vector3.new(0, -vertical, 0)
+		end
+		hrp.Velocity = hrp.Velocity:Lerp(vel, 0.55)
+	end)
+end
+function disableBoost()
+	if boostConn then
+		boostConn:Disconnect()
+		boostConn = nil
+	end
+	local char = player.Character
+	if char and char:FindFirstChild("Humanoid") then
+		char.Humanoid.PlatformStand = false
+	end
+end
+
+makeToggleBtn("Boost", function(on)
+	if on then enableBoost() else disableBoost() end
+end)
+
+
+-- ============================
+-- AUTO BAT (preserved)
+-- ============================
+local autoBatEnabled = false
+local autoBatConn -- not needed but kept for future
+local rotationConn
+
+local function stripLayeredClothes()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then
+			for _, item in ipairs(plr.Character:GetChildren()) do
+				if item:IsA("Accessory") then
+					local at = item.AccessoryType
+					if at == Enum.AccessoryType.TShirt
+					or at == Enum.AccessoryType.Shirt
+					or at == Enum.AccessoryType.Jacket
+					or at == Enum.AccessoryType.Sweater
+					or at == Enum.AccessoryType.Pants
+					or (item:FindFirstChild("Handle") and item.Handle:FindFirstChild("WrapTarget"))
+					then
+						pcall(function() item:Destroy() end)
+					end
+				end
+			end
+		end
+	end
+end
+
+local function getClosestPlayer(distLimit)
+	local char = player.Character
+	if not char then return nil end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return nil end
+	local closest, bestDist = nil, distLimit
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+			local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+			if dist < bestDist then
+				closest = plr
+				bestDist = dist
+			end
+		end
+	end
+	return closest
+end
+
+local function equipBat()
+	local char = player.Character
+	if not char then return nil end
+	local bp = player:FindFirstChild("Backpack")
+	if not bp then return nil end
+	local bat = bp:FindFirstChild("Bat")
+	if bat then
+		pcall(function() bat.Parent = char end)
+		return bat
+	end
+	return char:FindFirstChild("Bat")
+end
+
+-- ============================
+-- ROTATION LOCK (12 studs)
+-- ============================
+local function updateRotation()
+	if not autoBatEnabled then return end
+
+	local char = player.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local closestPlayer = getClosestPlayer(12)
+	if not closestPlayer then
+		-- Stop rotating if nobody in range
+		local spin = root:FindFirstChild("Spinning")
+		if spin then spin:Destroy() end
+		return
+	end
+
+	local targetRoot = closestPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not targetRoot then return end
+
+	local direction = (targetRoot.Position - root.Position)
+	local targetYaw = math.atan2(-direction.X, -direction.Z)
+	local currentYaw = root.Orientation.Y * math.pi/180
+	local diff = targetYaw - currentYaw
+
+	local speed = math.clamp(diff * 25, -80, 80)
+
+	local old = root:FindFirstChild("Spinning")
+	if old then old:Destroy() end
+
+	local spin = Instance.new("BodyAngularVelocity")
+	spin.Name = "Spinning"
+	spin.Parent = root
+	spin.MaxTorque = Vector3.new(0, math.huge, 0)
+	spin.AngularVelocity = Vector3.new(0, speed, 0)
+end
+
+-- ============================
+-- ProximityPrompt hook
+-- ============================
+Workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("ProximityPrompt") then
+		obj.Triggered:Connect(function()
+			if autoBatEnabled then
+				task.wait(0.1)
+				local bat = equipBat()
+				if bat then pcall(function() bat:Activate() end) end
+			end
+		end)
+	end
+end)
+
+-- ============================
+-- Main hit loop (9 studs)
+-- ============================
+task.spawn(function()
+	while RS.Heartbeat:Wait() do
+		if not autoBatEnabled then continue end
+		local bat = equipBat()
+		if not bat then continue end
+		local target = getClosestPlayer(9.7)
+		if target then
+			pcall(function() bat:Activate() end)
+		end
+	end
+end)
+
+-- ============================
+-- Toggle Button
+-- ============================
+makeToggleBtn("Auto Bat", function(on)
+	autoBatEnabled = on
+
+	if on then
+		stripLayeredClothes()
+
+		-- Start locking loop
+		if rotationConn then rotationConn:Disconnect() end
+		rotationConn = RS.RenderStepped:Connect(updateRotation)
+
+	else
+		-- Stop rotation
+		if rotationConn then rotationConn:Disconnect() end
+
+		local char = player.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local spin = char.HumanoidRootPart:FindFirstChild("Spinning")
+			if spin then spin:Destroy() end
+		end
+	end
+end)
+
+
+-- ============================
+-- FAST SLAP (one-time, with working BodyAngularVelocity rotation)
+-- ============================
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local fastSlapEnabled = false
+local fastSlapUsed = false
+
+-- Find nearest player (no distance limit)
+local function getNearestPlayerNoLimit()
+    local char = player.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local closest, bestDist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+            if dist < bestDist then
+                closest = plr
+                bestDist = dist
+            end
+        end
+    end
+    return closest
+end
+
+-- Equip Glitched Slap
+local function equipGlitchedSlap()
+    local char = player.Character
+    if not char then return nil end
+    local bp = player:FindFirstChild("Backpack")
+    if not bp then return nil end
+
+    local tool = bp:FindFirstChild("Glitched Slap")
+    if tool then
+        pcall(function() tool.Parent = char end)
+        return tool
+    end
+
+    return char:FindFirstChild("Glitched Slap")
+end
+
+-- Apply your BodyAngularVelocity rotation each frame for a short duration so it actually turns
+local function fastSlapRotateAndDo(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local char = player.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+
+    -- ensure any old spin removed
+    local old = root:FindFirstChild("Spinning")
+    if old then old:Destroy() end
+
+    local spin = Instance.new("BodyAngularVelocity")
+    spin.Name = "Spinning"
+    spin.Parent = root
+    spin.MaxTorque = Vector3.new(0, math.huge, 0)
+    spin.AngularVelocity = Vector3.new(0, 0, 0)
+
+    -- RunRenderStepped to update spin toward moving target
+    local conn
+    local start = tick()
+    local duration = 0.12 -- short, snappy rotation window (seconds). tweak if needed
+    conn = RS.RenderStepped:Connect(function()
+        if not root.Parent or not targetRoot.Parent then
+            return
+        end
+
+        local direction = (targetRoot.Position - root.Position)
+        local targetYaw = math.atan2(-direction.X, -direction.Z)
+        local currentYaw = root.Orientation.Y * math.pi/180
+        local diff = targetYaw - currentYaw
+
+        local speed = math.clamp(diff * 25, -80, 80) -- your original formula
+        -- apply into existing spin object
+        if spin.Parent then
+            spin.AngularVelocity = Vector3.new(0, speed, 0)
+        end
+
+        -- timeout
+        if tick() - start >= duration then
+            conn:Disconnect()
+        end
+    end)
+
+    -- wait the duration so rotation has time to happen, then proceed to slap
+    task.wait(duration)
+
+    -- Activate tool
+    local tool = equipGlitchedSlap()
+    if tool then
+        pcall(function() tool:Activate() end)
+        pcall(function() tool.Parent = player.Backpack end)
+    end
+
+    -- cleanup spin immediately
+    if conn and conn.Connected then conn:Disconnect() end
+    local s = root:FindFirstChild("Spinning")
+    if s then s:Destroy() end
+end
+
+-- Main one-time loop
+task.spawn(function()
+    while RS.Heartbeat:Wait() do
+        if not fastSlapEnabled then continue end
+        if fastSlapUsed then continue end
+
+        local target = getNearestPlayerNoLimit()
+        if not target then continue end
+
+        -- rotate toward them (using your BodyAngularVelocity system updated each frame), then slap
+        fastSlapRotateAndDo(target)
+
+        fastSlapUsed = true
+    end
+end)
+
+-- Toggle button
+makeToggleBtn("Fast Slap", function(on)
+    fastSlapEnabled = on
+    fastSlapUsed = false
+end)
+
+
+
+-- keep it active with a light loop
+local expanderConn
+makeToggleBtn("Hitbox Expander", function(on)
+	expanderEnabled = on
+	if on then
+		applyExpanderToAll()
+		if expanderConn then expanderConn:Disconnect() end
+		expanderConn = RS.Heartbeat:Connect(function(dt)
+			-- only run once every 0.25s to reduce cost
+			expanderConn._acc = (expanderConn._acc or 0) + dt
+			if expanderConn._acc >= 0.25 then
+				expanderConn._acc = 0
+				applyExpanderToAll()
+			end
+		end)
+	else
+		if expanderConn then expanderConn:Disconnect() expanderConn = nil end
+		-- do not revert players' parts (could conflict), user can rejoin to reset
+	end
+end)
+
+-- expand for new players' characters
+Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function(char)
+		task.wait(0.35)
+		if expanderEnabled then expandForCharacter(char) end
+	end)
+end)
+-- if players already present
+for _, plr in ipairs(Players:GetPlayers()) do
+	plr.CharacterAdded:Connect(function(char)
+		task.wait(0.35)
+		if expanderEnabled then expandForCharacter(char) end
+	end)
+end
+
+-- ============================
+-- TOGGLE FRIENDS (LEFT AS-IS, ALWAYS LAST)
+-- ============================
+-- Your provided Toggle Friends UI block — left intact and placed last in the container.
+local REPlotServiceToggleFriends = ReplicatedStorage.Packages.Net["RE/PlotService/ToggleFriends"]
+
+local btnFrame = Instance.new("Frame")
+btnFrame.Size = UDim2.new(1, 0, 0, 40)
+btnFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+btnFrame.Parent = buttonContainer
+Instance.new("UICorner", btnFrame).CornerRadius = UDim.new(0,10)
+
+local dot = Instance.new("Frame")
+dot.Size = UDim2.new(0,16,0,16)
+dot.Position = UDim2.new(0,12,0.5,-8)
+dot.BackgroundColor3 = Color3.fromRGB(200,50,50) -- red default
+dot.Parent = btnFrame
+Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+
+local tfBtn = Instance.new("TextButton")
+tfBtn.Size = UDim2.new(1, -50, 1, 0)
+tfBtn.Position = UDim2.new(0,40,0,0)
+tfBtn.BackgroundTransparency = 1
+tfBtn.Text = "Toggle Friends [OFF]"
+tfBtn.TextColor3 = Color3.new(1,1,1)
+tfBtn.Font = Enum.Font.GothamBold
+tfBtn.TextSize = 15
+tfBtn.TextXAlignment = Enum.TextXAlignment.Left
+tfBtn.Parent = btnFrame
+
+local lastCheck = 0
+local myPlot = nil
+local function findBaseSign()
+	for _, plot in ipairs(Workspace:WaitForChild("Plots"):GetChildren()) do
+		local sign = plot:FindFirstChild("PlotSign")
+		if sign then
+			local gui = sign:FindFirstChild("YourBase")
+			if gui and gui:IsA("BillboardGui") and gui.Enabled then
+				return sign
+			end
+		end
+	end
+	return nil
+end
+
+local function getMyPlot()
+	if tick() - lastCheck < 1 then return myPlot end
+	lastCheck = tick()
+
+	local sign = findBaseSign()
+	if not sign then myPlot = nil return nil end
+
+	local target = sign:FindFirstChildWhichIsA("BasePart") or sign
+	if not target then myPlot = nil return nil end
+
+	myPlot = target.Parent
+	return myPlot
+end
+
+local function updateIndicator()
+	local plot = getMyPlot()
+	if not plot then
+		tfBtn.Text = "Toggle Friends [NO BASE]"
+		dot.BackgroundColor3 = Color3.fromRGB(100,100,100)
+		return
+	end
+
+	local panel = plot:FindFirstChild("FriendPanel")
+	if not panel then return end
+
+	local main = panel:FindFirstChild("Main")
+	if not main then return end
+
+	local prompt = main:FindFirstChild("ProximityPrompt")
+	if not prompt then return end
+
+	local state = (prompt.ObjectText == "Disallow Friends") -- ON
+	dot.BackgroundColor3 = state and Color3.fromRGB(50,200,50) or Color3.fromRGB(200,50,50)
+	tfBtn.Text = "Toggle Friends [" .. (state and "ON" or "OFF") .. "]"
+end
+
+tfBtn.MouseButton1Click:Connect(function()
+	local plot = getMyPlot()
+	if not plot then
+		tfBtn.Text = "Toggle Friends [NO BASE]"
+		task.delay(1, updateIndicator)
+		return
+	end
+	REPlotServiceToggleFriends:FireServer()
+	task.delay(0.3, updateIndicator)
+end)
+RS.Heartbeat:Connect(updateIndicator)
+
+-- ensure initial sizing
+resizeHub()
