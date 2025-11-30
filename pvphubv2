@@ -425,7 +425,38 @@ makeToggleBtn("Fast Slap", function(on)
     fastSlapUsed = false
 end)
 
+-- ============================
+-- HITBOX EXPANDER
+-- ============================
+local expanderEnabled = false
+local EXPAND_SIZE = Vector3.new(12.5, 12.5, 12.5)
 
+local function expandForCharacter(char)
+	if not char then return end
+	if char == player.Character then return end
+	local hb = char:FindFirstChild("__HITBOX")
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local function applyTo(part)
+		if not part or not part:IsA("BasePart") then return end
+		pcall(function()
+			part.Size = EXPAND_SIZE
+			part.Transparency = 0.7
+			part.Color = Color3.fromRGB(200,0,255)
+			part.Material = Enum.Material.ForceField
+			part.CanCollide = false
+		end)
+	end
+	applyTo(hb)
+	applyTo(hrp)
+end
+
+local function applyExpanderToAll()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then
+			expandForCharacter(plr.Character)
+		end
+	end
+end
 
 -- keep it active with a light loop
 local expanderConn
