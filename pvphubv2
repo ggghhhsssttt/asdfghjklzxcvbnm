@@ -499,17 +499,10 @@ local function enableAntiKB()
     if antiKBActive then return end
     antiKBActive = true
 
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Workspace = game:GetService("Workspace")
-
-    local plr = Players.LocalPlayer
+    local plr = game.Players.LocalPlayer
     local char = plr.Character or plr.CharacterAdded:Wait()
     local hum = char:WaitForChild("Humanoid")
     local root = char:WaitForChild("HumanoidRootPart")
-    local cam = Workspace.CurrentCamera
-    local lastVel = Vector3.zero
 
     local function isRagdolled()
         local s = hum:GetState()
@@ -519,76 +512,53 @@ local function enableAntiKB()
             or s == Enum.HumanoidStateType.GettingUp
     end
 
-    local function restore()
+    -- Only restore controls once, don't spam every frame
+    local controlsRestored = false
+    local function restoreOnce()
+        if controlsRestored then return end
+        controlsRestored = true
+
         pcall(function()
             local pm = plr:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
             require(pm):GetControls():Enable()
         end)
-
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("BallSocketConstraint")
-            or d:IsA("NoCollisionConstraint")
-            or d:IsA("HingeConstraint")
-            or (d:IsA("Attachment") and (d.Name == "A" or d.Name == "B"))
-            or d:IsA("BodyVelocity")
-            or d:IsA("BodyPosition")
-            or d:IsA("BodyGyro") then
-                d:Destroy()
-            end
-        end
-
-        for _, m in ipairs(char:GetDescendants()) do
-            if m:IsA("Motor6D") then
-                m.Enabled = true
-            end
-        end
-
-        cam.CameraSubject = hum
+        root.AssemblyLinearVelocity = Vector3.zero
     end
 
     -- Prevent ragdoll state
     table.insert(antiKBConnections, hum.StateChanged:Connect(function(_, _)
-        if not antiKBActive then return end
-        if isRagdolled() then
+        if antiKBActive and isRagdolled() then
             hum:ChangeState(Enum.HumanoidStateType.Running)
-            restore()
+            restoreOnce()
         end
     end))
 
-    -- Stop impulse events
+    -- Stop impulse events (only zero velocity, no repeated restores)
     pcall(function()
-        table.insert(antiKBConnections,
-            ReplicatedStorage.Packages.Net["RE/CombatService/ApplyImpulse"].OnClientEvent:Connect(function()
-                if antiKBActive and isRagdolled() then
-                    root.AssemblyLinearVelocity = Vector3.zero
-                end
-            end)
-        )
+        local impulseEvent = ReplicatedStorage.Packages.Net["RE/CombatService/ApplyImpulse"]
+        if impulseEvent then
+            table.insert(antiKBConnections,
+                impulseEvent.OnClientEvent:Connect(function()
+                    if antiKBActive and isRagdolled() then
+                        root.AssemblyLinearVelocity = Vector3.zero
+                    end
+                end)
+            )
+        end
     end)
 
-    -- Kill new ragdoll parts
-    table.insert(antiKBConnections, char.DescendantAdded:Connect(function(d)
-        if antiKBActive and isRagdolled() then
-            restore()
-        end
-    end))
-
-    -- Clamp velocity while KB is happening
-    table.insert(antiKBConnections, RunService.Heartbeat:Connect(function()
+    -- Clamp velocity safely without touching PlayerModule repeatedly
+    table.insert(antiKBConnections, game:GetService("RunService").Heartbeat:Connect(function()
         if not antiKBActive then return end
-
         if isRagdolled() then
-            restore()
-
             local vel = root.AssemblyLinearVelocity
-            if (vel - lastVel).Magnitude >= 40 and vel.Magnitude >= 25 then
+            if vel.Magnitude >= 25 then
                 root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
             end
-            lastVel = vel
+        else
+            controlsRestored = false -- reset for next ragdoll
         end
     end))
-
-    restore()
 end
 
 local function disableAntiKB()
