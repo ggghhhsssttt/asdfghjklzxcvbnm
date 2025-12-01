@@ -503,16 +503,17 @@ local function enableAntiKB()
     local char = plr.Character or plr.CharacterAdded:Wait()
     local hum = char:WaitForChild("Humanoid")
     local root = char:WaitForChild("HumanoidRootPart")
+    local cam = workspace.CurrentCamera
 
     local function isRagdolled()
         local s = hum:GetState()
-        return s == Enum.HumanoidStateType.Physics 
-            or s == Enum.HumanoidStateType.Ragdoll 
-            or s == Enum.HumanoidStateType.FallingDown 
+        return s == Enum.HumanoidStateType.Physics
+            or s == Enum.HumanoidStateType.Ragdoll
+            or s == Enum.HumanoidStateType.FallingDown
             or s == Enum.HumanoidStateType.GettingUp
     end
 
-    -- Only restore controls once, don't spam every frame
+    -- Restore controls safely
     local controlsRestored = false
     local function restoreOnce()
         if controlsRestored then return end
@@ -520,8 +521,31 @@ local function enableAntiKB()
 
         pcall(function()
             local pm = plr:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
-            require(pm):GetControls():Enable()
+            local controls = require(pm):GetControls()
+            if not game:GetService("UserInputService"):IsMouseLocked() then
+                controls:Enable()
+            end
         end)
+
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BallSocketConstraint")
+            or d:IsA("NoCollisionConstraint")
+            or d:IsA("HingeConstraint")
+            or (d:IsA("Attachment") and (d.Name == "A" or d.Name == "B"))
+            or d:IsA("BodyVelocity")
+            or d:IsA("BodyPosition")
+            or d:IsA("BodyGyro") then
+                d:Destroy()
+            end
+        end
+
+        for _, m in ipairs(char:GetDescendants()) do
+            if m:IsA("Motor6D") then
+                m.Enabled = true
+            end
+        end
+
+        cam.CameraSubject = hum
         root.AssemblyLinearVelocity = Vector3.zero
     end
 
@@ -533,9 +557,9 @@ local function enableAntiKB()
         end
     end))
 
-    -- Stop impulse events (only zero velocity, no repeated restores)
+    -- Stop impulse events
     pcall(function()
-        local impulseEvent = ReplicatedStorage.Packages.Net["RE/CombatService/ApplyImpulse"]
+        local impulseEvent = game:GetService("ReplicatedStorage").Packages.Net["RE/CombatService/ApplyImpulse"]
         if impulseEvent then
             table.insert(antiKBConnections,
                 impulseEvent.OnClientEvent:Connect(function()
@@ -547,7 +571,7 @@ local function enableAntiKB()
         end
     end)
 
-    -- Clamp velocity safely without touching PlayerModule repeatedly
+    -- Clamp velocity safely
     table.insert(antiKBConnections, game:GetService("RunService").Heartbeat:Connect(function()
         if not antiKBActive then return end
         if isRagdolled() then
@@ -556,7 +580,7 @@ local function enableAntiKB()
                 root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
             end
         else
-            controlsRestored = false -- reset for next ragdoll
+            controlsRestored = false -- ready for next ragdoll
         end
     end))
 end
@@ -569,9 +593,7 @@ local function disableAntiKB()
     antiKBConnections = {}
 end
 
--- ================================
--- Create the UI button
--- ================================
+-- Toggle button
 makeToggleBtn("Anti Knockback", function(on)
     if on then
         enableAntiKB()
