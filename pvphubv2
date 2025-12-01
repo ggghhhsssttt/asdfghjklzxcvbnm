@@ -262,7 +262,7 @@ task.spawn(function()
 		if not autoBatEnabled then continue end
 		local bat = equipBat()
 		if not bat then continue end
-		local target = getClosestPlayer(9.7)
+		local target = getClosestPlayer(9.3)
 		if target then
 			pcall(function() bat:Activate() end)
 		end
