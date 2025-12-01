@@ -1,23 +1,56 @@
---// HUB: Fixed, auto-resizing buttons using makeToggleBtn (Toggle Friends left intact)
-local player = game.Players.LocalPlayer
-local RS = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
+--// FUWATTI PVP HUB - FINAL CLEAN + AUTO-SAVE CONFIG (MiniHubConfig.json)
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local RS                = RunService
+local UserInputService  = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
+local HttpService       = game:GetService("HttpService")
+local Workspace         = game:GetService("Workspace")
 
--- wait for PlayerGui
+local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Root GUI
+local CONFIG_FILE = "MiniHubConfig.json"
+local config = {}
+
+-- =========================
+-- CONFIG AUTO LOAD / SAVE
+-- =========================
+local function loadConfig()
+    if isfile and readfile and isfile(CONFIG_FILE) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(CONFIG_FILE))
+        end)
+        if success and type(data) == "table" then
+            config = data
+        end
+    end
+end
+
+local function saveConfig()
+    if writefile then
+        pcall(function()
+            writefile(CONFIG_FILE, HttpService:JSONEncode(config))
+        end)
+    end
+end
+
+loadConfig()  -- load on start
+
+-- save automatically when player leaves (just in case)
+player.AncestryChanged:Connect(function(_, parent)
+    if not parent then saveConfig() end
+end)
+
+-- =========================
+-- GUI SETUP
+-- =========================
 local gui = Instance.new("ScreenGui")
 gui.Name = "MiniHub"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
 gui.Parent = playerGui
 
--- Window
 local window = Instance.new("Frame")
 window.Size = UDim2.new(0, 300, 0, 60)
 window.Position = UDim2.new(0, 10, 0.5, -150)
@@ -27,7 +60,6 @@ window.Draggable = true
 window.Parent = gui
 Instance.new("UICorner", window).CornerRadius = UDim.new(0,12)
 
--- Title + Close
 local title = Instance.new("TextLabel", window)
 title.Size = UDim2.new(1, -40, 0, 30)
 title.Position = UDim2.new(0,10,0,5)
@@ -48,7 +80,6 @@ close.TextSize = 16
 Instance.new("UICorner", close).CornerRadius = UDim.new(0,6)
 close.MouseButton1Click:Connect(function() gui:Destroy() end)
 
--- Button container with layout so buttons auto-readjust
 local buttonContainer = Instance.new("Frame", window)
 buttonContainer.Name = "ButtonContainer"
 buttonContainer.Size = UDim2.new(1, -20, 0, 0)
@@ -60,60 +91,49 @@ UIList.SortOrder = Enum.SortOrder.LayoutOrder
 UIList.Padding = UDim.new(0,6)
 
 local function resizeHub()
-	task.spawn(function()
-		-- small wait ensures UIList updates AbsoluteContentSize
-		task.wait()
-		local h = UIList.AbsoluteContentSize.Y
-		buttonContainer.Size = UDim2.new(1, -20, 0, h)
-		window.Size = UDim2.new(0, 300, 0, math.clamp(h + 60, 120, 900))
-	end)
+    task.wait()
+    local h = UIList.AbsoluteContentSize.Y
+    buttonContainer.Size = UDim2.new(1, -20, 0, h)
+    window.Size = UDim2.new(0, 300, 0, math.clamp(h + 60, 120, 900))
 end
 UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resizeHub)
 
--- CONFIG
-local config = {} -- stores states and keybinds
+-- =========================
+-- TOGGLE BUTTON MAKER (WITH AUTO-SAVE)
+-- =========================
+local function makeToggleBtn(name, callback)
+    local saved = config[name] or {State = false, Key = nil}
+    local state = saved.State == true
 
-local function saveConfig()
-    if writefile then
-        local json = HttpService:JSONEncode(config)
-        writefile("MiniHubConfig.json", json)
-    end
-end
-
-local function loadConfig()
-    if isfile and isfile("MiniHubConfig.json") then
-        local json = readfile("MiniHubConfig.json")
-        local ok, data = pcall(HttpService.JSONDecode, HttpService, json)
-        if ok then
-            config = data
+    -- Fix: Properly restore KeyCode from string (if it was saved as "Enum.KeyCode.X")
+    local keybind = nil
+    if saved.Key then
+        if typeof(saved.Key) == "EnumItem" then
+            keybind = saved.Key
+        elseif typeof(saved.Key) == "string" then
+            local success, enum = pcall(function()
+                return Enum.KeyCode[saved.Key:match("KeyCode%.(.+)")]
+            end)
+            if success and enum then
+                keybind = enum
+            end
         end
     end
-end
 
-loadConfig()
-
-
-local function makeToggleBtn(name, callback)
-    local state = config[name] and config[name].State or false
-    local keybind = config[name] and config[name].Key or nil
-
-    -- button container
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, 35)
     frame.BackgroundTransparency = 1
     frame.Parent = buttonContainer
 
-    -- main toggle button
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.7, 0, 1, 0)
-    btn.Position = UDim2.new(0,0,0,0)
+    btn.BackgroundColor3 = state and Color3.fromRGB(50,150,50) or Color3.fromRGB(60,60,60)
     btn.TextColor3 = Color3.new(1,1,1)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
     btn.Parent = frame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
 
-    -- keybind button
     local keyBtn = Instance.new("TextButton")
     keyBtn.Size = UDim2.new(0.3, -6, 1, 0)
     keyBtn.Position = UDim2.new(0.7, 6, 0, 0)
@@ -125,40 +145,39 @@ local function makeToggleBtn(name, callback)
     keyBtn.Parent = frame
     Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0,8)
 
-    -- update text & color
-    local function updateText()
+    local function updateUI()
         btn.Text = name .. (state and " [ON]" or " [OFF]") .. (keybind and (" ["..keybind.Name.."]") or "")
-        keyBtn.Text = keybind and keybind.Name or "Set Key"
         btn.BackgroundColor3 = state and Color3.fromRGB(50,150,50) or Color3.fromRGB(60,60,60)
-        config[name] = config[name] or {}
-        config[name].State = state
-        config[name].Key = keybind
+        keyBtn.Text = keybind and keybind.Name or "Set Key"
+    end
+    updateUI()
+
+    local function saveState()
+        config[name] = {
+            State = state,
+            Key = keybind and tostring(keybind) or nil  -- Save as string so it survives JSON
+        }
+        saveConfig()
     end
 
-    -- initial sync
-    updateText()
-
-    -- toggle function
-    local function toggle(s)
-        state = s ~= nil and s or not state
-        updateText()
-        task.spawn(function() pcall(function() callback(state) end) end)
+    local function toggle(newState)
+        state = newState ~= nil and newState or not state
+        saveState()
+        updateUI()
+        task.spawn(function() pcall(callback, state) end)
     end
+
     btn.MouseButton1Click:Connect(toggle)
 
-    -- keybind input
     UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            if keybind and input.KeyCode == keybind then
-                toggle()
-            end
+        if input.UserInputType == Enum.UserInputType.Keyboard and keybind and input.KeyCode == keybind then
+            toggle()
         end
     end)
 
-    -- keybind setter
     keyBtn.MouseButton1Click:Connect(function()
-        keyBtn.Text = "Press key or Alt"
+        keyBtn.Text = "Press key..."
         local conn
         conn = UserInputService.InputBegan:Connect(function(input, gpe)
             if gpe then return end
@@ -168,7 +187,8 @@ local function makeToggleBtn(name, callback)
                 else
                     keybind = input.KeyCode
                 end
-                updateText()
+                saveState()
+                updateUI()
                 conn:Disconnect()
             end
         end)
@@ -178,40 +198,29 @@ local function makeToggleBtn(name, callback)
     return btn
 end
 
-
--- Detect if player is ragdolled
+-- RAGDOLL DETECTION + SPIN STOPPER
 local isRagdolled = false
-
 local function connectRagdollDetection()
     local char = player.Character or player.CharacterAdded:Wait()
     local hum = char:WaitForChild("Humanoid")
-
     hum.StateChanged:Connect(function(_, new)
         if new == Enum.HumanoidStateType.Ragdoll then
             isRagdolled = true
-        elseif new == Enum.HumanoidStateType.GettingUp 
-            or new == Enum.HumanoidStateType.Running 
-            or new == Enum.HumanoidStateType.Landed then
+        elseif new == Enum.HumanoidStateType.GettingUp or new == Enum.HumanoidStateType.Running or new == Enum.HumanoidStateType.Landed then
             isRagdolled = false
         end
     end)
 end
-
 connectRagdollDetection()
 player.CharacterAdded:Connect(connectRagdollDetection)
 
-
--- UNIVERSAL SPIN STOPPER
 task.spawn(function()
     while task.wait() do
-        if isRagdolled then
-            local char = player.Character
-            if char then
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local spin = hrp:FindFirstChild("Spinning")
-                    if spin then spin:Destroy() end
-                end
+        if isRagdolled and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local spin = hrp:FindFirstChild("Spinning")
+                if spin then spin:Destroy() end
             end
         end
     end
@@ -223,7 +232,6 @@ end)
 -- ============================
 -- IMPLEMENTED FEATURES
 -- ============================
-
 -- BOOST (flight->rename to Boost, mechanics unchanged)
 local boostConn = nil
 local function enableBoost()
@@ -262,7 +270,6 @@ end
 makeToggleBtn("Boost", function(on)
 	if on then enableBoost() else disableBoost() end
 end)
-
 
 -- ============================
 -- AUTO BAT (preserved)
@@ -886,9 +893,6 @@ end
 connectRagdollSnapOff()
 player.CharacterAdded:Connect(connectRagdollSnapOff)
 
-
-
-
 -- ============================
 -- TOGGLE FRIENDS (LEFT AS-IS, ALWAYS LAST)
 -- ============================
@@ -982,5 +986,8 @@ tfBtn.MouseButton1Click:Connect(function()
 end)
 RS.Heartbeat:Connect(updateIndicator)
 
--- ensure initial sizing
+-- FORCE FINAL RESIZE SO TOGGLE FRIENDS BUTTON NEVER DISAPPEARS
+task.wait()
 resizeHub()
+
+print("[FuwattiPVP] Fully loaded — Toggle Friends button fixed")
