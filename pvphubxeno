@@ -624,11 +624,10 @@ makeToggleBtn("Fast Slap", function(on)
     fastSlapUsed = false
 end)
 
--- ================================
--- ANTI KNOCKBACK TOGGLE BUTTON
--- ================================
+
 local antiKBConnections = {}
 local antiKBActive = false
+local originalSensitivity = game:GetService("UserInputService").MouseDeltaSensitivity
 
 local function enableAntiKB()
     if antiKBActive then return end
@@ -639,91 +638,102 @@ local function enableAntiKB()
     local hum = char:WaitForChild("Humanoid")
     local root = char:WaitForChild("HumanoidRootPart")
     local cam = workspace.CurrentCamera
+    local UIS = game:GetService("UserInputService")
+    local RS = game:GetService("RunService")
 
-    local function isRagdolled()
-        local s = hum:GetState()
-        return s == Enum.HumanoidStateType.Physics
-            or s == Enum.HumanoidStateType.Ragdoll
-            or s == Enum.HumanoidStateType.FallingDown
-            or s == Enum.HumanoidStateType.GettingUp
-    end
+    -- Save original sensitivity
+    originalSensitivity = UIS.MouseDeltaSensitivity
+    UIS.MouseDeltaSensitivity = 0.68
 
-    -- Restore controls safely
-    local controlsRestored = false
-    local function restoreOnce()
-        if controlsRestored then return end
-        controlsRestored = true
-
-        pcall(function()
-            local pm = plr:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
-            local controls = require(pm):GetControls()
-            if not game:GetService("UserInputService"):IsMouseLocked() then
-                controls:Enable()
-            end
-        end)
-
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("BallSocketConstraint")
-            or d:IsA("NoCollisionConstraint")
-            or d:IsA("HingeConstraint")
-            or (d:IsA("Attachment") and (d.Name == "A" or d.Name == "B"))
-            or d:IsA("BodyVelocity")
-            or d:IsA("BodyPosition")
-            or d:IsA("BodyGyro") then
-                d:Destroy()
-            end
-        end
-
-        for _, m in ipairs(char:GetDescendants()) do
-            if m:IsA("Motor6D") then
-                m.Enabled = true
-            end
-        end
-
+    local function fixAll()
         cam.CameraSubject = hum
-        root.AssemblyLinearVelocity = Vector3.zero
+
+        -- Remove ragdoll constraints
+        for _, obj in ipairs(char:GetDescendants()) do
+            if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint")
+            or obj:IsA("NoCollisionConstraint") or obj:IsA("BodyVelocity")
+            or obj:IsA("BodyPosition") or obj:IsA("BodyGyro") then
+                obj:Destroy()
+            end
+        end
+
+        -- Re-enable Motor6Ds
+        for _, m in ipairs(char:GetDescendants()) do
+            if m:IsA("Motor6D") then m.Enabled = true end
+        end
+
+        -- Zero velocity
+        root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+        root.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end
 
-    -- Prevent ragdoll state
-    table.insert(antiKBConnections, hum.StateChanged:Connect(function(_, _)
-        if antiKBActive and isRagdolled() then
+    ---------------------------
+    --  NORMAL MOVEMENT HERE --
+    ---------------------------
+---------------------------
+--  NORMAL MOVEMENT + JUMP
+---------------------------
+local moveConn = RS.RenderStepped:Connect(function()
+    if not antiKBActive then return end
+
+    local moveDir = Vector3.zero
+
+    -- WASD movement
+    if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += Vector3.new(0,0,-1) end
+    if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir += Vector3.new(0,0, 1) end
+    if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir += Vector3.new(-1,0,0) end
+    if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += Vector3.new( 1,0,0) end
+
+    -- Apply movement correctly (fixes "W keeps going forward")
+    if moveDir.Magnitude > 0 then
+        hum:Move(moveDir, true)
+    else
+        hum:Move(Vector3.zero, true)
+    end
+
+    -- Force jump
+    if UIS:IsKeyDown(Enum.KeyCode.Space) then
+        hum.Jump = true
+    end
+end)
+
+table.insert(antiKBConnections, moveConn)
+---------------------------
+    ---------------------------
+
+    table.insert(antiKBConnections, hum.StateChanged:Connect(function(_, new)
+        if not antiKBActive then return end
+        if new == Enum.HumanoidStateType.Ragdoll 
+        or new == Enum.HumanoidStateType.Physics 
+        or new == Enum.HumanoidStateType.FallingDown then
             hum:ChangeState(Enum.HumanoidStateType.Running)
-            restoreOnce()
+            task.spawn(fixAll)
         end
     end))
 
-    -- Stop impulse events
-    pcall(function()
-        local impulseEvent = game:GetService("ReplicatedStorage").Packages.Net["RE/CombatService/ApplyImpulse"]
-        if impulseEvent then
-            table.insert(antiKBConnections,
-                impulseEvent.OnClientEvent:Connect(function()
-                    if antiKBActive and isRagdolled() then
-                        root.AssemblyLinearVelocity = Vector3.zero
-                    end
-                end)
-            )
+    table.insert(antiKBConnections, RS.Heartbeat:Connect(function()
+        if not antiKBActive or not root then return end
+        local vel = root.AssemblyLinearVelocity
+        if vel.Magnitude > 80 then
+            root.AssemblyLinearVelocity = vel.Unit * 15
         end
-    end)
+    end))
 
-    -- Clamp velocity safely
-    table.insert(antiKBConnections, game:GetService("RunService").Heartbeat:Connect(function()
-        if not antiKBActive then return end
-        if isRagdolled() then
-            local vel = root.AssemblyLinearVelocity
-            if vel.Magnitude >= 25 then
-                root.AssemblyLinearVelocity = vel.Unit * math.min(vel.Magnitude, 15)
-            end
-        else
-            controlsRestored = false -- ready for next ragdoll
+    table.insert(antiKBConnections, RS.Stepped:Connect(function()
+        if antiKBActive and cam.CameraSubject ~= hum then
+            cam.CameraSubject = hum
         end
     end))
 end
 
 local function disableAntiKB()
     antiKBActive = false
+
+    -- Restore sensitivity
+    game:GetService("UserInputService").MouseDeltaSensitivity = originalSensitivity
+
     for _, c in ipairs(antiKBConnections) do
-        c:Disconnect()
+        if c.Connected then c:Disconnect() end
     end
     antiKBConnections = {}
 end
