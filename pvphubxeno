@@ -625,6 +625,141 @@ makeToggleBtn("Fast Slap", function(on)
 end)
 
 
+-- ============================
+-- FAST MEGAPHONE (one-time, with working BodyAngularVelocity rotation)
+-- ============================
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local fastSlapEnabled = false
+local fastSlapUsed = false
+
+-- Find nearest player (no distance limit)
+local function getNearestPlayerNoLimit()
+    local char = player.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local closest, bestDist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+            if dist < bestDist then
+                closest = plr
+                bestDist = dist
+            end
+        end
+    end
+    return closest
+end
+
+-- Equip Glitched Slap
+local function equipMegaphone()
+    local char = player.Character
+    if not char then return nil end
+    local bp = player:FindFirstChild("Backpack")
+    if not bp then return nil end
+
+    local tool = bp:FindFirstChild("Megaphone")
+    if tool then
+        pcall(function() tool.Parent = char end)
+        return tool
+    end
+
+    return char:FindFirstChild("Megaphone")
+end
+
+-- Apply your BodyAngularVelocity rotation each frame for a short duration so it actually turns
+local function fastSlapRotateAndDo(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local char = player.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+
+    -- ensure any old spin removed
+    local old = root:FindFirstChild("Spinning")
+    if old then old:Destroy() end
+
+    local spin = Instance.new("BodyAngularVelocity")
+    spin.Name = "Spinning"
+    spin.Parent = root
+    spin.MaxTorque = Vector3.new(0, math.huge, 0)
+    spin.AngularVelocity = Vector3.new(0, 0, 0)
+
+    -- RunRenderStepped to update spin toward moving target
+    local conn
+    local start = tick()
+    local duration = 0.12 -- short, snappy rotation window (seconds). tweak if needed
+    conn = RS.RenderStepped:Connect(function()
+        if not root.Parent or not targetRoot.Parent then
+            return
+        end
+
+        local direction = (targetRoot.Position - root.Position)
+        local targetYaw = math.atan2(-direction.X, -direction.Z)
+        local currentYaw = root.Orientation.Y * math.pi/180
+        local diff = targetYaw - currentYaw
+
+        local speed = math.clamp(diff * 25, -80, 80) -- your original formula
+        -- apply into existing spin object
+        if spin.Parent then
+            spin.AngularVelocity = Vector3.new(0, speed, 0)
+        end
+
+        -- timeout
+        if tick() - start >= duration then
+            conn:Disconnect()
+        end
+    end)
+
+    -- wait the duration so rotation has time to happen, then proceed to slap
+    task.wait(duration)
+
+    -- Activate tool
+    local tool = equipMegaphone()
+    if tool then
+        pcall(function() tool:Activate() end)
+        pcall(function() tool.Parent = player.Backpack end)
+    end
+
+    -- cleanup spin immediately
+    if conn and conn.Connected then conn:Disconnect() end
+    local s = root:FindFirstChild("Spinning")
+    if s then s:Destroy() end
+end
+
+-- Main one-time loop
+task.spawn(function()
+    while RS.Heartbeat:Wait() do
+        if not fastSlapEnabled then continue end
+        if fastSlapUsed then continue end
+
+        local target = getNearestPlayerNoLimit()
+        if not target then continue end
+
+        -- rotate toward them (using your BodyAngularVelocity system updated each frame), then slap
+        fastSlapRotateAndDo(target)
+
+        fastSlapUsed = true
+    end
+end)
+
+-- Toggle button
+makeToggleBtn("Fast Megaphone", function(on)
+    fastSlapEnabled = on
+    fastSlapUsed = false
+end)
+
+--=========================
+--=====ANTI KNOCKBACK--=============
+--==========================
+
+
 local antiKBConnections = {}
 local antiKBActive = false
 local originalSensitivity = game:GetService("UserInputService").MouseDeltaSensitivity
