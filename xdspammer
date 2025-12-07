@@ -1,0 +1,275 @@
+local v1 = getgenv and getgenv() or _G
+if v1.__XD_SPAM_PANEL__ then
+    return
+else
+    v1.__XD_SPAM_PANEL__ = true
+    repeat
+        task.wait()
+    until game and game.IsLoaded and game:IsLoaded()
+    local vu2 = game:GetService("Players")
+    local vu3 = game:GetService("ReplicatedStorage")
+    local vu4 = game:GetService("StarterGui")
+    local v5 = game:GetService("CoreGui")
+    local vu6 = vu2.LocalPlayer
+    local vu7 = false
+    local vu8 = {
+        "rocket",
+        "balloon",
+        "inverse",
+        "tiny"
+    }
+    local function vu12(pu9, pu10, pu11)
+        if vu7 then
+            pcall(function()
+                vu4:SetCore("SendNotification", {
+                    Title = pu9,
+                    Text = pu10,
+                    Duration = pu11 or 3
+                })
+            end)
+        end
+    end
+    local vu20 = (function(p13)
+        local v14 = os.clock()
+        local v15 = vu3:FindFirstChild("Packages")
+        local v16 = p13 or 6
+        while not v15 do
+            if v16 < os.clock() - v14 then
+                return nil
+            end
+            task.wait(0.1)
+            v15 = vu3:FindFirstChild("Packages")
+        end
+        local v17 = v15:FindFirstChild("Net")
+        while not v17 do
+            if v16 < os.clock() - v14 then
+                return nil
+            end
+            task.wait(0.1)
+            v17 = v15:FindFirstChild("Net")
+        end
+        local v18 = v17:FindFirstChild("RE/AdminPanelService/ExecuteCommand")
+        local v19 = v14 + v16
+        while not v18 and os.clock() < v19 do
+            task.wait(0.1)
+            v18 = v15:FindFirstChild("Net")
+            if v18 then
+                v18 = v15.Net:FindFirstChild("RE/AdminPanelService/ExecuteCommand")
+            end
+        end
+        return v18
+    end)(6)
+    if vu20 and vu20:IsA("RemoteEvent") then
+        local function vu23(p21)
+            local v22 = p21.DisplayName or ""
+            if v22 == "" or v22 == p21.Name then
+                return "@" .. p21.Name
+            else
+                return string.format("%s  (@%s)", v22, p21.Name)
+            end
+        end
+        local v24 = Instance.new("ScreenGui")
+        v24.Name = "xd_spam_gui"
+        v24.ResetOnSpawn = false
+        v24.IgnoreGuiInset = true
+        v24.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        v24.Parent = v5:FindFirstChildOfClass("ScreenGui") and v5 and v5 or (vu6:FindFirstChildOfClass("PlayerGui") or v5)
+        local vu25 = Instance.new("Frame")
+        vu25.Name = "Root"
+        vu25.Size = UDim2.fromOffset(300, 380)
+        vu25.Position = UDim2.fromOffset(40, 120)
+        vu25.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+        vu25.BorderSizePixel = 0
+        vu25.BackgroundTransparency = 0.08
+        vu25.Parent = v24
+        local v26 = Instance.new("UIStroke")
+        v26.Thickness = 1
+        v26.Color = Color3.fromRGB(255, 70, 85)
+        v26.Transparency = 0.25
+        v26.Parent = vu25
+        local v27 = Instance.new("UICorner")
+        v27.CornerRadius = UDim.new(0, 12)
+        v27.Parent = vu25
+        local v28 = Instance.new("Frame")
+        v28.Name = "TopBar"
+        v28.Size = UDim2.new(1, 0, 0, 36)
+        v28.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+        v28.BorderSizePixel = 0
+        v28.Parent = vu25
+        local v29 = Instance.new("UICorner")
+        v29.CornerRadius = UDim.new(0, 12)
+        v29.Parent = v28
+        local v30 = Instance.new("TextLabel")
+        v30.Name = "Title"
+        v30.BackgroundTransparency = 1
+        v30.Size = UDim2.new(1, - 90, 1, 0)
+        v30.Position = UDim2.fromOffset(12, 0)
+        v30.Font = Enum.Font.GothamBold
+        v30.TextSize = 16
+        v30.TextXAlignment = Enum.TextXAlignment.Left
+        v30.TextColor3 = Color3.fromRGB(235, 235, 235)
+        v30.Text = "xd spam"
+        v30.Parent = v28
+        local v31 = Instance.new("TextButton")
+        v31.Text = "Refresh"
+        v31.AutoButtonColor = true
+        v31.Font = Enum.Font.Gotham
+        v31.TextSize = 14
+        v31.BackgroundColor3 = Color3.fromRGB(42, 42, 42)
+        v31.TextColor3 = Color3.fromRGB(235, 235, 235)
+        v31.Size = UDim2.fromOffset(80, 26)
+        v31.Position = UDim2.new(1, - 86, 0, 5)
+        v31.Parent = v28
+        local v32 = Instance.new("UICorner")
+        v32.CornerRadius = UDim.new(0, 8)
+        v32.Parent = v31
+        local v33 = Instance.new("Frame")
+        v33.Name = "Holder"
+        v33.BackgroundTransparency = 1
+        v33.Size = UDim2.new(1, - 16, 1, - 52)
+        v33.Position = UDim2.fromOffset(8, 44)
+        v33.Parent = vu25
+        local vu34 = Instance.new("ScrollingFrame")
+        vu34.Name = "List"
+        vu34.Active = true
+        vu34.ScrollingDirection = Enum.ScrollingDirection.Y
+        vu34.ScrollBarThickness = 6
+        vu34.BackgroundTransparency = 1
+        vu34.BorderSizePixel = 0
+        vu34.Size = UDim2.new(1, 0, 1, 0)
+        vu34.CanvasSize = UDim2.fromOffset(0, 0)
+        vu34.Parent = v33
+        local vu35 = Instance.new("UIListLayout")
+        vu35.Padding = UDim.new(0, 6)
+        vu35.SortOrder = Enum.SortOrder.LayoutOrder
+        vu35.Parent = vu34
+        local v36 = Instance.new("UIPadding")
+        v36.PaddingTop = UDim.new(0, 4)
+        v36.PaddingLeft = UDim.new(0, 2)
+        v36.PaddingRight = UDim.new(0, 2)
+        v36.PaddingBottom = UDim.new(0, 8)
+        v36.Parent = vu34
+        local vu37 = false
+        local vu38 = nil
+        local vu39 = nil
+        local function vu42(p40)
+            local v41 = p40.Position - vu38
+            vu25.Position = UDim2.fromOffset(vu39.X.Offset + v41.X, vu39.Y.Offset + v41.Y)
+        end
+        v28.InputBegan:Connect(function(pu43)
+            if pu43.UserInputType == Enum.UserInputType.MouseButton1 then
+                vu37 = true
+                vu38 = pu43.Position
+                vu39 = vu25.Position
+                pu43.Changed:Connect(function()
+                    if pu43.UserInputState == Enum.UserInputState.End then
+                        vu37 = false
+                    end
+                end)
+            end
+        end)
+        v28.InputChanged:Connect(function(p44)
+            if p44.UserInputType == Enum.UserInputType.MouseMovement and vu37 then
+                vu42(p44)
+            end
+        end)
+        local function vu50(pu45)
+            if pu45 and pu45.Parent == vu2 then
+                task.spawn(function()
+                    local v46, v47, v48 = ipairs(vu8)
+                    while true do
+                        local vu49
+                        v48, vu49 = v46(v47, v48)
+                        if v48 == nil then
+                            break
+                        end
+                        pcall(function()
+                            vu20:FireServer(pu45, vu49)
+                        end)
+                    end
+                    vu12("Sent", string.format("\239\191\189\239\191\189 %s (%d cmds)", pu45.Name, # vu8), 2)
+                end)
+            end
+        end
+        local function vu54(pu51)
+            local vu52 = Instance.new("TextButton")
+            vu52.Name = "P_" .. pu51.UserId
+            vu52.Size = UDim2.new(1, - 6, 0, 34)
+            vu52.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+            vu52.TextColor3 = Color3.fromRGB(235, 235, 235)
+            vu52.Font = Enum.Font.Gotham
+            vu52.TextSize = 14
+            vu52.AutoButtonColor = true
+            vu52.TextXAlignment = Enum.TextXAlignment.Left
+            vu52.Text = "  " .. vu23(pu51)
+            local v53 = Instance.new("UICorner")
+            v53.CornerRadius = UDim.new(0, 8)
+            v53.Parent = vu52
+            vu52.MouseEnter:Connect(function()
+                vu52.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
+            end)
+            vu52.MouseLeave:Connect(function()
+                vu52.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+            end)
+            vu52.Activated:Connect(function()
+                vu50(pu51)
+            end)
+            return vu52
+        end
+        local function v73()
+            local v55 = vu34
+            local v56, v57, v58 = ipairs(v55:GetChildren())
+            while true do
+                local v59
+                v58, v59 = v56(v57, v58)
+                if v58 == nil then
+                    break
+                end
+                if v59:IsA("TextButton") then
+                    v59:Destroy()
+                end
+            end
+            local v60 = vu2
+            local v61, v62, v63 = ipairs(v60:GetPlayers())
+            local v64 = {}
+            while true do
+                local v65
+                v63, v65 = v61(v62, v63)
+                if v63 == nil then
+                    break
+                end
+                if v65 ~= vu6 then
+                    table.insert(v64, v65)
+                end
+            end
+            table.sort(v64, function(p66, p67)
+                return p66.Name:lower() < p67.Name:lower()
+            end)
+            local v68, v69, v70 = ipairs(v64)
+            while true do
+                local v71
+                v70, v71 = v68(v69, v70)
+                if v70 == nil then
+                    break
+                end
+                vu54(v71).Parent = vu34
+            end
+            task.defer(function()
+                local v72 = vu35.AbsoluteContentSize
+                vu34.CanvasSize = UDim2.fromOffset(0, v72.Y + 16)
+            end)
+        end
+        local v74 = vu35
+        vu35.GetPropertyChangedSignal(v74, "AbsoluteContentSize"):Connect(function()
+            local v75 = vu35.AbsoluteContentSize
+            vu34.CanvasSize = UDim2.fromOffset(0, v75.Y + 16)
+        end)
+        v31.MouseButton1Click:Connect(v73)
+        vu2.PlayerAdded:Connect(v73)
+        vu2.PlayerRemoving:Connect(v73)
+        v73()
+        vu12("xd spam ready", "Click a player to run instant rocket/balloon/inverse/tiny", 4)
+    else
+        vu12("Missing Remote", "RE/AdminPanelService/ExecuteCommand not found", 5)
+    end
+end
