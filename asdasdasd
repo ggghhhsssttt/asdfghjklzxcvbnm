@@ -1,4 +1,4 @@
--- anti bee
+-- NEWEST FUWATTI HUB V3
 local player = game.Players.LocalPlayer
 local RS   = game:GetService("RunService")
 local UIS  = game:GetService("UserInputService")
@@ -200,6 +200,22 @@ UIS.InputBegan:Connect(function(inp, gp)
     end
 end)
 
+-- GLOBAL flight connection so hub can kill it
+local GLOBAL_FlightConn = nil
+local function GLOBAL_DisableFlight()
+    if GLOBAL_FlightConn then
+        GLOBAL_FlightConn:Disconnect()
+        GLOBAL_FlightConn = nil
+    end
+
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.PlatformStand = false
+    end
+end
+
+
+
 local function makeBtn(name, order, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1,0,0,45)
@@ -278,7 +294,7 @@ end
 
             -- ONE-TIME COIL COMBO
             if not _G.stealFloor then
-                local tool = player.Backpack:FindFirstChild("Coil Combo") or char:FindFirstChild("Coil Combo")
+                local tool = player.Backpack:FindFirstChild("a") or char:FindFirstChild("Coil Combo")
                 if tool and hum then hum:EquipTool(tool) end
             end
 
@@ -541,12 +557,16 @@ end)
 
 
 -- === MINI HUB BUTTON ===
-makeBtn("Flight", 80, function(state)
+makeBtn("Fuwatti Booster", 80, function(state)
     local playerGui = player:FindFirstChild("PlayerGui")
     if not playerGui then return end
 
     local existingGUI = playerGui:FindFirstChild("SpeedHelperGUI")
     if not state then
+        GLOBAL_DisableFlight()
+        CONFIG.states["Flight"] = true
+        saveConfig()
+
         if existingGUI then
             existingGUI:Destroy()
         end
@@ -555,29 +575,52 @@ makeBtn("Flight", 80, function(state)
 
     if existingGUI then return end
 
- local gui = Instance.new("ScreenGui")
-gui.Name = "SpeedHelperGUI"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
+    -- UI ROOT
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "SpeedHelperGUI"
+    gui.ResetOnSpawn = false
+    gui.Parent = playerGui
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 150)
-frame.AnchorPoint = Vector2.new(1, 0.5)           -- Critical!
-frame.Position = UDim2.new(1, -20, 0.5, -75)      -- 20px from right
-frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-frame.Active = true
-frame.Draggable = true
-frame.Parent = gui
+    -- MAIN WINDOW
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 150)
+    frame.AnchorPoint = Vector2.new(1, 0.5)
+    frame.Position = UDim2.new(1, -20, 0.5, -75)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = gui
 
-local corner = Instance.new("UICorner", frame)
-corner.CornerRadius = UDim.new(0, 12)
+    local corner = Instance.new("UICorner", frame)
+    corner.CornerRadius = UDim.new(0, 12)
 
-    -- Title
+    -- ★ SEXY PURPLE/BLACK ANIMATED BORDER
+    local border = Instance.new("UIStroke")
+    border.Parent = frame
+    border.Thickness = 3
+    border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    task.spawn(function()
+        local t, dir = 0, 1
+        while frame.Parent do
+            t = t + 0.03 * dir
+            if t >= 1 then dir = -1 elseif t <= 0 then dir = 1 end
+
+            border.Color = Color3.fromRGB(
+                25 + 95 * t,
+                0,
+                50 + 150 * t
+            )
+            task.wait(0.01)
+        end
+    end)
+
+    -- === TITLE ===
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 25)
     title.BackgroundTransparency = 1
-    title.Text = "Speed Helper"
-    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Text = "Fuwatti Booster"
+    title.TextColor3 = Color3.fromRGB(200, 150, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 16
     title.Parent = frame
@@ -596,7 +639,7 @@ corner.CornerRadius = UDim.new(0, 12)
         if not hrp or not hum then return end
 
         hum.PlatformStand = false
-        flightConn = RS.Heartbeat:Connect(function()
+        GLOBAL_FlightConn = RS.Heartbeat:Connect(function()
             if not hrp or not hum then return end
             local moveDir = hum.MoveDirection
             local vel = Vector3.new(moveDir.X * speed, 0, moveDir.Z * speed)
@@ -610,61 +653,61 @@ corner.CornerRadius = UDim.new(0, 12)
     end
 
     local function disableFlight()
-        if flightConn then
-            flightConn:Disconnect()
-            flightConn = nil
-        end
+ 	GLOBAL_DisableFlight()
         local char = player.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.PlatformStand = false
         end
     end
 
+    -- === BOOST BUTTON (SEXY PURPLE) ===
     local flightBtn = Instance.new("TextButton")
     flightBtn.Size = UDim2.new(1, -20, 0, 50)
     flightBtn.Position = UDim2.new(0, 10, 0, 35)
-    flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    flightBtn.Text = "Toggle Speed Boost [OFF]"
+    flightBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 150)
+    flightBtn.Text = "Toggle Speed [OFF]"
     flightBtn.TextColor3 = Color3.new(1, 1, 1)
     flightBtn.Font = Enum.Font.GothamBold
     flightBtn.TextSize = 18
     flightBtn.Parent = frame
     Instance.new("UICorner", flightBtn).CornerRadius = UDim.new(0, 12)
 
-    -- Set initial state from config
     if CONFIG.states["Flight"] then
         flying = true
         enableFlight()
-        flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [ON]"
-        flightBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        flightBtn.Text = "Toggle Speed [ON]"
+        flightBtn.BackgroundColor3 = Color3.fromRGB(120, 0, 200)
     end
 
     flightBtn.MouseButton1Click:Connect(function()
         flying = not flying
         if flying then
             enableFlight()
-            flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [ON]"
-            flightBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+            flightBtn.Text = "Toggle Speed [ON]"
+            flightBtn.BackgroundColor3 = Color3.fromRGB(120, 0, 200)
         else
             disableFlight()
-            flightBtn.Text = "Toggle Flight ￰ﾟﾕﾊ￯ﾸﾏ [OFF]"
-            flightBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            flightBtn.Text = "Toggle Speed [OFF]"
+            flightBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 150)
         end
+
         CONFIG.states["Flight"] = flying
         saveConfig()
     end)
 
-    -- Slider
+    ----------------------------------------------------
+    -- === SNAPPY SLIDER (0.1 STEPS, VERY CLEAN) ===
+    ----------------------------------------------------
     local sliderFrame = Instance.new("Frame")
     sliderFrame.Size = UDim2.new(1, -20, 0, 20)
     sliderFrame.Position = UDim2.new(0, 10, 0, 95)
-    sliderFrame.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(50,50,50)
     sliderFrame.Parent = frame
     Instance.new("UICorner", sliderFrame).CornerRadius = UDim.new(0, 6)
 
     local sliderBar = Instance.new("Frame")
     sliderBar.Size = UDim2.new(speed/29, 0, 1, 0)
-    sliderBar.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    sliderBar.BackgroundColor3 = Color3.fromRGB(120,0,200)
     sliderBar.Parent = sliderFrame
     Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 6)
 
@@ -679,15 +722,21 @@ corner.CornerRadius = UDim.new(0, 12)
     sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
     sliderLabel.Parent = sliderFrame
 
-    -- Dragging logic
     local dragging = false
+
     local function updateSlider(x)
-        local framePos = sliderFrame.AbsolutePosition.X
-        local frameSize = sliderFrame.AbsoluteSize.X
-        local newVal = math.clamp((x - framePos) / frameSize, 0, 1) * 29
-        speed = math.floor(newVal*100)/100
+        local fp = sliderFrame.AbsolutePosition.X
+        local fs = sliderFrame.AbsoluteSize.X
+
+        local val = math.clamp((x - fp) / fs, 0, 1) * 29
+
+        -- ★ SNAPPY STEP = 0.1
+        val = math.floor(val * 10 + 0.5) / 10
+
+        speed = val
         sliderBar.Size = UDim2.new(speed/29, 0, 1, 0)
-        sliderLabel.Text = "Speed: " .. tostring(speed)
+        sliderLabel.Text = "Speed: " .. speed
+
         CONFIG.FlightSpeed = speed
         saveConfig()
     end
@@ -779,11 +828,13 @@ end)
     equip()
 end)
 
-        makeBtn("Invis Cam",220,function(state)
+        makeBtn("Ghost Cam",501,function(state)
             player.DevCameraOcclusionMode = state and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom
         end)
+		
 
-        makeBtn("Spin",275,function(state)
+		
+        makeBtn("Spin",500,function(state)
             local function stop()
                 local char = player.Character
                 if not char then return end
@@ -848,40 +899,6 @@ end)
             end)
         end)
 
-        makeBtn("Anti Lag/Anti Flash",385,function(state)
-            if not state then
-                if _G.antiLagConn then _G.antiLagConn:Disconnect(); _G.antiLagConn = nil end
-                if _G.antiLagDescConn then _G.antiLagDescConn:Disconnect(); _G.antiLagDescConn = nil end
-                return
-            end
-            local function stripHumanoid(hum)
-                local char = hum.Parent
-                if not char then return end
-                for _, obj in ipairs(char:GetDescendants()) do
-                    if obj:IsA("Accessory") or obj:IsA("LayeredClothing") or obj:IsA("Clothing") then
-                        pcall(function() obj:Destroy() end)
-                    end
-                end
-            end
-            local function stripAll()
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("Humanoid") then stripHumanoid(obj) end
-                end
-            end
-            stripAll()
-            _G.antiLagDescConn = workspace.DescendantAdded:Connect(function(obj)
-                if obj:IsA("Humanoid") then task.wait(0.5); stripHumanoid(obj)
-                elseif (obj:IsA("Accessory") or obj:IsA("LayeredClothing")) and obj.Parent and obj.Parent:FindFirstChildOfClass("Humanoid") then
-                    task.delay(0.1, function() pcall(function() obj:Destroy() end) end)
-                end
-            end)
-            _G.antiLagConn = player.CharacterAdded:Connect(function()
-                task.wait(1); stripAll()
-            end)
-        end)
-
-
-
 -- === SPAM TOOLS ￢ﾀﾓ BIGGER BUTTON + KEYBIND + CONFIG ===
 local player = game.Players.LocalPlayer
 local RS = game:GetService("RunService")
@@ -889,93 +906,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-
-makeBtn("Laser Lag", 110, function(state)
-    -- SAFE: Manual checks
-    local player = game.Players.LocalPlayer
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-
-    local replicated_storage = game:GetService("ReplicatedStorage")
-    local http_service = game:GetService("HttpService")
-    local run_service = game:GetService("RunService")
-    local user_input_service = game:GetService("UserInputService")
-
-    local local_player = player
-    local remote = replicated_storage.Packages.Net['RE/LaserGun_Fire']
-    local settings = require(replicated_storage.Shared.LaserGunsShared).Settings
-
-    -- Clean old connection
-    if _G.laserLagConn then
-        _G.laserLagConn:Disconnect()
-        _G.laserLagConn = nil
-    end
-
-    if not state then return end
-
-    -- === GUN MODS (APPLY ONCE) ===
-    settings.Radius.Value = 256
-    settings.MaxBounces.Value = 9999
-    settings.MaxAge.Value = 1e6
-    settings.StunDuration.Value = 60
-    settings.ImpulseForce.Value = 1e6
-    settings.Cooldown.Value = 0
-
-    -- === STATES ===
-    local lagger_enabled = true
-    local last_equipped = false
-
-    -- === GET NEAREST FUNCTION ===
-    local function get_nearest()
-        local nearest_player
-        local shortest_distance = math.huge
-        local local_character = local_player.Character
-        if not local_character or not local_character.PrimaryPart then
-            return nil
-        end
-        local local_position = local_character.PrimaryPart.Position
-        for _, p in ipairs(game.Players:GetPlayers()) do
-            local character = p.Character
-            if p ~= local_player and character and character.PrimaryPart then
-                local distance = (local_position - character.PrimaryPart.Position).Magnitude
-                if distance < shortest_distance then
-                    shortest_distance = distance
-                    nearest_player = p
-                end
-            end
-        end
-        return nearest_player
-    end
-
-    -- === MAIN LASER SPAM LOOP ===
-    _G.laserLagConn = run_service.RenderStepped:Connect(function()
-        local character = local_player.Character
-        if not character then return end
-
-        local tool = character:FindFirstChildOfClass('Tool')
-        local tool_equipped = tool and tool.Name == 'Laser Gun'
-        if tool_equipped ~= last_equipped then
-            last_equipped = tool_equipped
-        end
-
-        if not (lagger_enabled and tool_equipped) then
-            return
-        end
-
-        local target_player = get_nearest()
-        if not target_player then return end
-
-        local target_char = target_player.Character
-        if not (target_char and target_char.PrimaryPart and character.PrimaryPart) then return end
-
-        local pos1 = character.PrimaryPart.Position
-        local pos2 = target_char.PrimaryPart.Position
-        local direction = (pos2 - pos1).Unit
-        local id = http_service:GenerateGUID(false):lower():gsub('%-', '')
-
-        remote:FireServer(id, pos1, direction, workspace:GetServerTimeNow())
-    end)
-end)
 
 
 makeBtn("Spam Tools", 3, function(state)
@@ -1310,6 +1240,51 @@ task.spawn(function()
     buttons["Spam Tools"].btn.Size = UDim2.new(0, 200, 1, 0)  -- Wider button
 end)
 
+
+-- === ANTI LAG / ANTI FLASH ALWAYS ON ===
+local player = game.Players.LocalPlayer
+
+-- Function to strip accessories/clothing from a humanoid
+local function stripHumanoid(hum)
+    local char = hum.Parent
+    if not char then return end
+    for _, obj in ipairs(char:GetDescendants()) do
+        if obj:IsA("Accessory") or obj:IsA("LayeredClothing") or obj:IsA("Clothing") then
+            pcall(function() obj:Destroy() end)
+        end
+    end
+end
+
+-- Function to strip all humanoids in the workspace
+local function stripAll()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Humanoid") then
+            stripHumanoid(obj)
+        end
+    end
+end
+
+-- Run once immediately
+stripAll()
+
+-- Connect to new descendants
+_G.antiLagDescConn = workspace.DescendantAdded:Connect(function(obj)
+    if obj:IsA("Humanoid") then
+        task.wait(0.5)
+        stripHumanoid(obj)
+    elseif (obj:IsA("Accessory") or obj:IsA("LayeredClothing"))
+        and obj.Parent and obj.Parent:FindFirstChildOfClass("Humanoid") then
+        task.delay(0.1, function()
+            pcall(function() obj:Destroy() end)
+        end)
+    end
+end)
+
+-- Connect to player respawn
+_G.antiLagConn = player.CharacterAdded:Connect(function()
+    task.wait(1)
+    stripAll()
+end)
 
         -- =====================================================
         -- 8. BORDERS + PARTS (NO LENNON)
