@@ -243,38 +243,7 @@ end
 
 -- Spin logic
 local function applySpin(state)
-    local function stop()
-        local char = player.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local s = root:FindFirstChild("Spinning")
-        if s then s:Destroy() end
-    end
-
-    if not state then stop(); return end
-
-    local SPEED = 20
-    local function apply()
-        local char = player.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local old = root:FindFirstChild("Spinning")
-        if old then old:Destroy() end
-
-        local spin = Instance.new("BodyAngularVelocity")
-        spin.Name = "Spinning"
-        spin.Parent = root
-        spin.MaxTorque = Vector3.new(0, math.huge, 0)
-        spin.AngularVelocity = Vector3.new(0, SPEED, 0)
-    end
-
-    apply()
-    player.CharacterAdded:Connect(function()
-        task.wait(0.1)
-        apply()
-    end)
+print("idk")
 end
 
 -- Spam Tools toggle
