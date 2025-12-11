@@ -1,59 +1,58 @@
--- FUWATTI SPAMMER – 3x SPAM (12 TOTAL MESSAGES INSTANTLY)
+-- FUWATTI SPAMMER – 3x SPAM (12 TOTAL MESSAGES INSTANTLY + AUTO SPAM)
 
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
--- Force GUI to show (CoreGui fallback)
+-- Force GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "FuwattiSpammer"
 gui.ResetOnSpawn = false
 pcall(function() gui.Parent = player:WaitForChild("PlayerGui") end)
 if not gui.Parent then gui.Parent = game:GetService("CoreGui") end
 
--- 100% WORKING CHAT (fires both methods)
+-- Chat function
 local function send(msg)
-    msg = tostring(msg)
-    pcall(function()
-        if TextChatService.TextChannels then
-            TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
-        end
-    end)
-    pcall(function()
-        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
-    end)
+	msg = tostring(msg)
+	pcall(function()
+		if TextChatService.TextChannels then
+			TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
+		end
+	end)
+	pcall(function()
+		ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
+	end)
 end
 
--- SPAM 3 TIMES (12 total messages, 0 delay)
+-- 3x spam (12 msgs)
 local function spam3x(name)
-    local cmds = {
-        ";rocket " .. name,
-        ";balloon " .. name,
-        ";inverse " .. name,
-        ";tiny " .. name
-    }
-    
-    for i = 1, 3 do
-        for _, cmd in ipairs(cmds) do
-            send(cmd)
-        end
-    end
+	local cmds = {
+		";rocket " .. name,
+		";balloon " .. name,
+		";inverse " .. name,
+		";tiny " .. name
+	}
+	for _ = 1, 3 do
+		for _, cmd in ipairs(cmds) do
+			send(cmd)
+		end
+	end
 end
 
--- Main Frame
+----------------------------------------------------------
+-- GUI
+----------------------------------------------------------
+
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 420)
-frame.Position = UDim2.new(0.5, -150, 0.5, -210)
+frame.Size = UDim2.new(0, 300, 0, 470)
+frame.Position = UDim2.new(0.5, -150, 0.5, -235)
 frame.BackgroundColor3 = Color3.fromRGB(18, 18, 30)
 frame.BorderSizePixel = 0
 frame.Active = true
 frame.Draggable = true
 frame.Parent = gui
-
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
 
 local stroke = Instance.new("UIStroke")
@@ -72,10 +71,58 @@ title.TextSize = 24
 title.Parent = frame
 Instance.new("UICorner", title).CornerRadius = UDim.new(0, 16)
 
--- Scrolling List
+----------------------------------------------------------
+-- AUTO SPAM BUTTON
+----------------------------------------------------------
+
+local autoBtn = Instance.new("TextButton")
+autoBtn.Size = UDim2.new(1, -20, 0, 40)
+autoBtn.Position = UDim2.new(0, 10, 0, 55)
+autoBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 120)
+autoBtn.Text = "Auto Spam [OFF]"
+autoBtn.TextColor3 = Color3.new(1,1,1)
+autoBtn.Font = Enum.Font.GothamBold
+autoBtn.TextSize = 20
+autoBtn.Parent = frame
+Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0, 10)
+
+local autoEnabled = false
+autoBtn.MouseButton1Click:Connect(function()
+	autoEnabled = not autoEnabled
+	autoBtn.Text = "Auto Spam [" .. (autoEnabled and "ON" or "OFF") .. "]"
+	autoBtn.BackgroundColor3 = autoEnabled and Color3.fromRGB(255, 90, 150) or Color3.fromRGB(255, 50, 120)
+end)
+
+----------------------------------------------------------
+-- TARGET MODE DROPDOWN (Nearest / Selected Player)
+----------------------------------------------------------
+
+local modeBtn = Instance.new("TextButton")
+modeBtn.Size = UDim2.new(1, -20, 0, 40)
+modeBtn.Position = UDim2.new(0, 10, 0, 100)
+modeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 90)
+modeBtn.Text = "Target Mode: Nearest"
+modeBtn.TextColor3 = Color3.new(1,1,1)
+modeBtn.Font = Enum.Font.GothamBold
+modeBtn.TextSize = 18
+modeBtn.Parent = frame
+Instance.new("UICorner", modeBtn).CornerRadius = UDim.new(0, 10)
+
+local mode = "Nearest"
+modeBtn.MouseButton1Click:Connect(function()
+	mode = mode == "Nearest" and "Selected" or "Nearest"
+	modeBtn.Text = "Target Mode: " .. mode
+end)
+
+local selectedPlayer = nil
+
+----------------------------------------------------------
+-- Player List
+----------------------------------------------------------
+
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -65)
-scroll.Position = UDim2.new(0, 10, 0, 55)
+scroll.Size = UDim2.new(1, -20, 1, -150)
+scroll.Position = UDim2.new(0, 10, 0, 150)
 scroll.BackgroundTransparency = 1
 scroll.ScrollBarThickness = 8
 scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 90, 130)
@@ -86,40 +133,86 @@ local layout = Instance.new("UIListLayout")
 layout.Padding = UDim.new(0, 10)
 layout.Parent = scroll
 
--- Refresh Players
+-- Refresh list
 local function refresh()
-    for _, v in scroll:GetChildren() do
-        if v:IsA("TextButton") then v:Destroy() end
-    end
-    task.wait(0.15)
+	for _, v in scroll:GetChildren() do
+		if v:IsA("TextButton") then v:Destroy() end
+	end
+	task.wait(0.15)
 
-    for _, plr in Players:GetPlayers() do
-        if plr ~= player then
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, 0, 0, 48)
-            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-            btn.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
-            btn.TextColor3 = Color3.new(1,1,1)
-            btn.Font = Enum.Font.GothamBold
-            btn.TextSize = 18
-            btn.Parent = scroll
+	for _, plr in Players:GetPlayers() do
+		if plr ~= player then
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, 0, 0, 48)
+			btn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+			btn.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
+			btn.TextColor3 = Color3.new(1,1,1)
+			btn.Font = Enum.Font.GothamBold
+			btn.TextSize = 18
+			btn.Parent = scroll
 
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 12)
-            corner.Parent = btn
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 12)
+			corner.Parent = btn
 
-            btn.MouseButton1Click:Connect(function()
-                btn.BackgroundColor3 = Color3.fromRGB(255, 90, 130)
-                task.wait(0.12)
-                btn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-                spam3x(plr.Name) -- 12 messages instantly
-            end)
-        end
-    end
+			btn.MouseButton1Click:Connect(function()
+				btn.BackgroundColor3 = Color3.fromRGB(255, 90, 130)
+				task.wait(0.12)
+				btn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+
+				selectedPlayer = plr
+				spam3x(plr.Name)
+			end)
+		end
+	end
 end
 
 refresh()
 Players.PlayerAdded:Connect(refresh)
 Players.PlayerRemoving:Connect(refresh)
 
-print("FUWATTI SPAMMER 3x LOADED – CLICK = 12 INSTANT MESSAGES")
+----------------------------------------------------------
+-- AUTO SPAM LOGIC (same trigger as Auto Laser)
+----------------------------------------------------------
+
+local notifFolder = player:WaitForChild("PlayerGui"):WaitForChild("Notification"):WaitForChild("Notification")
+
+notifFolder.ChildAdded:Connect(function(child)
+	if not autoEnabled then return end
+
+	local label = child:FindFirstChildWhichIsA("TextLabel")
+	if not label then return end
+
+	if label.Text:match("Someone is stealing your") then
+		local target = nil
+
+		if mode == "Selected" then
+			if selectedPlayer then
+				target = selectedPlayer
+			end
+		else
+			-- Nearest
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if root then
+				local closestDist = math.huge
+
+				for _, plr in Players:GetPlayers() do
+					if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+						local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+						if dist < closestDist then
+							closestDist = dist
+							target = plr
+						end
+					end
+				end
+			end
+		end
+
+		if target then
+			task.spawn(spam3x, target.Name)
+		end
+	end
+end)
+
+print("FUWATTI SPAMMER 3x + AUTO SPAM READY")
