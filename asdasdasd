@@ -475,8 +475,7 @@ end)
     end)
 end)
 
-
-makeBtn("Fps Devour v3", 20, function(state)
+makeBtn("Fps Devour v4", 20, function(state)
     if not state then
         -- turn OFF (no loop so nothing to clean)
         return
@@ -485,16 +484,15 @@ makeBtn("Fps Devour v3", 20, function(state)
     task.spawn(function()
         local Players = game:GetService("Players")
         local RunService = game:GetService("RunService")
-        local replicated = game:GetService("ReplicatedStorage")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
         local player = Players.LocalPlayer
         local character = player.Character or player.CharacterAdded:Wait()
         local backpack = player:WaitForChild("Backpack")
 
         local toolName1 = "Quantum Cloner"
-        local toolName2 = "Glitched Slap"
 
-        -- wait for a tool to exist in backpack
+        -- wait for a tool to exist in backpack (generic)
         local function waitForTool(name)
             local tool = backpack:FindFirstChild(name)
             while not tool do
@@ -504,56 +502,72 @@ makeBtn("Fps Devour v3", 20, function(state)
             return tool
         end
 
-        -- main logic
-        local function equipBothAndClone()
-            local cloner = waitForTool(toolName1)
-            local slap = waitForTool(toolName2)
+        -- get all slap tools in backpack dynamically
+        local function getSlapTools()
+            local slaps = {}
+            for _, t in pairs(backpack:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("slap") then
+                    table.insert(slaps, t)
+                end
+            end
+            return slaps
+        end
 
-            -- place both tools into character (equips them)
-            cloner.Parent = character
-            slap.Parent = character
+        local function equipClonerAndSlaps()
+            -- wait for Quantum Cloner
+            local cloner = waitForTool(toolName1)
+            if cloner then cloner.Parent = character end
+
+            -- equip all slap tools
+            local slaps = getSlapTools()
+            for _, slap in pairs(slaps) do
+                slap.Parent = character
+            end
 
             -- wait 2 frames
             RunService.RenderStepped:Wait()
             RunService.RenderStepped:Wait()
 
--- fire cloner click
-pcall(function()
-    replicated:WaitForChild("Packages")
-    :WaitForChild("Net")
-    :WaitForChild("RE/UseItem")
-    :FireServer()
-end)
+            -- fire cloner click
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Packages")
+                    :WaitForChild("Net")
+                    :WaitForChild("RE/UseItem")
+                    :FireServer()
+            end)
 
--- fire Quantum Cloner teleport event RIGHT AFTER
-pcall(function()
-    replicated:WaitForChild("Packages")
-    :WaitForChild("Net")
-    :WaitForChild("RE")
-    :WaitForChild("QuantumCloner")
-    :WaitForChild("OnTeleport")
-    :FireServer()
-end)
+            -- fire Quantum Cloner teleport
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Packages")
+                    :WaitForChild("Net")
+                    :WaitForChild("RE")
+                    :WaitForChild("QuantumCloner")
+                    :WaitForChild("OnTeleport")
+                    :FireServer()
+            end)
 
-            -- detect tool switching and unequip both if player swaps tools
+            -- auto unequip if player switches tools
             character.ChildAdded:Connect(function(child)
                 if child:IsA("Tool") then
-                    local t = character:FindFirstChildOfClass("Tool")
-                    if t and t.Name ~= toolName1 and t.Name ~= toolName2 then
+                    local currentTool = character:FindFirstChildOfClass("Tool")
+                    if currentTool and currentTool.Name ~= toolName1 and not currentTool.Name:lower():find("slap") then
                         if cloner and cloner.Parent == character then
                             cloner.Parent = backpack
                         end
-                        if slap and slap.Parent == character then
-                            slap.Parent = backpack
+                        for _, slap in pairs(slaps) do
+                            if slap.Parent == character then
+                                slap.Parent = backpack
+                            end
                         end
                     end
                 end
             end)
         end
 
-        equipBothAndClone()
+        equipClonerAndSlaps()
     end)
 end)
+
 
 
 -- === MINI HUB BUTTON ===
@@ -778,55 +792,88 @@ end)
             end)
         end)
 
- makeBtn("Glitched Slap",165,function(state)
-    -- === FULL CLEANUP ===
-    for _, v in pairs({"Conn","CharConn","BpAdd","BpRem"}) do
-        if _G["gs"..v] then _G["gs"..v]:Disconnect(); _G["gs"..v]=nil end
-    end
+makeBtn("Equip Slaps", 165, function(state)
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local player = Players.LocalPlayer
 
-    -- === OFF: UNEQUIP + STOP ===
-    if not state then
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:UnequipTools() end
-        end
-        return
-    end
+    -- Cleanup old connections
+    if _G.EquipSlapsConn then _G.EquipSlapsConn:Disconnect() _G.EquipSlapsConn = nil end
+    if _G.EquipSlapsCharConn then _G.EquipSlapsCharConn:Disconnect() _G.EquipSlapsCharConn = nil end
 
-    -- === ON: ALWAYS EQUIPPED ===
-    local function equip()
+    local function getSlapTools()
         local char = player.Character
         local bp = player:FindFirstChild("Backpack")
-        if not char or not bp then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then return end
-        local tool = bp:FindFirstChild("Glitched Slap") or char:FindFirstChild("Glitched Slap")
-        if tool and tool.Parent ~= char then
-            hum:EquipTool(tool)
+        local tools = {}
+        if char then
+            for _, t in pairs(char:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("slap") then
+                    table.insert(tools, t)
+                end
+            end
         end
+        if bp then
+            for _, t in pairs(bp:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("slap") then
+                    table.insert(tools, t)
+                end
+            end
+        end
+        return tools
     end
 
-    _G.gsConn = RS.Heartbeat:Connect(function()
-        if tick() - (_G.gsLast or 0) >= 0.4 then
-            _G.gsLast = tick()
-            equip()
+    if state then
+        local currentIndex = 1
+
+        _G.EquipSlapsConn = RunService.Heartbeat:Connect(function()
+            local char = player.Character
+            if not char then return end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+
+            local tools = getSlapTools()
+            if #tools == 0 then return end
+
+            local tool = tools[currentIndex]
+            if tool and tool.Parent ~= char then
+                hum:EquipTool(tool)
+            end
+
+            -- Cycle to next tool each tick
+            currentIndex = currentIndex + 1
+            if currentIndex > #tools then currentIndex = 1 end
+        end)
+
+        _G.EquipSlapsCharConn = player.CharacterAdded:Connect(function(newChar)
+            task.wait(0.5)
+            local hum = newChar:WaitForChild("Humanoid")
+            local tools = getSlapTools()
+            if #tools > 0 then
+                hum:EquipTool(tools[1])
+            end
+        end)
+    else
+        -- Disconnect
+        if _G.EquipSlapsConn then _G.EquipSlapsConn:Disconnect() _G.EquipSlapsConn = nil end
+        if _G.EquipSlapsCharConn then _G.EquipSlapsCharConn:Disconnect() _G.EquipSlapsCharConn = nil end
+
+        -- Move all Slap tools back to backpack
+        local char = player.Character
+        local bp = player:FindFirstChild("Backpack")
+        if char and bp then
+            for _, t in pairs(char:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("slap") then
+                    t.Parent = bp
+                end
+            end
         end
-    end)
-
-    _G.gsCharConn = player.CharacterAdded:Connect(function()
-        task.wait(0.6)
-        equip()
-    end)
-
-    local bp = player:FindFirstChild("Backpack")
-    if bp then
-        _G.gsBpAdd = bp.ChildAdded:Connect(equip)
-        _G.gsBpRem = bp.ChildRemoved:Connect(equip)
     end
-
-    equip()
 end)
+
+
+
+
+
 
         makeBtn("Ghost Cam",501,function(state)
             player.DevCameraOcclusionMode = state and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom
