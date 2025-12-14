@@ -792,87 +792,57 @@ end)
             end)
         end)
 
-makeBtn("Equip Slaps", 165, function(state)
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local player = Players.LocalPlayer
 
-    -- Cleanup old connections
-    if _G.EquipSlapsConn then _G.EquipSlapsConn:Disconnect() _G.EquipSlapsConn = nil end
-    if _G.EquipSlapsCharConn then _G.EquipSlapsCharConn:Disconnect() _G.EquipSlapsCharConn = nil end
 
-    local function getSlapTools()
+ makeBtn("Glitched Slap",165,function(state)
+    -- === FULL CLEANUP ===
+    for _, v in pairs({"Conn","CharConn","BpAdd","BpRem"}) do
+        if _G["gs"..v] then _G["gs"..v]:Disconnect(); _G["gs"..v]=nil end
+    end
+
+    -- === OFF: UNEQUIP + STOP ===
+    if not state then
         local char = player.Character
-        local bp = player:FindFirstChild("Backpack")
-        local tools = {}
         if char then
-            for _, t in pairs(char:GetChildren()) do
-                if t:IsA("Tool") and t.Name:lower():find("slap") then
-                    table.insert(tools, t)
-                end
-            end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:UnequipTools() end
         end
-        if bp then
-            for _, t in pairs(bp:GetChildren()) do
-                if t:IsA("Tool") and t.Name:lower():find("slap") then
-                    table.insert(tools, t)
-                end
-            end
-        end
-        return tools
+        return
     end
 
-    if state then
-        local currentIndex = 1
-
-        _G.EquipSlapsConn = RunService.Heartbeat:Connect(function()
-            local char = player.Character
-            if not char then return end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-
-            local tools = getSlapTools()
-            if #tools == 0 then return end
-
-            local tool = tools[currentIndex]
-            if tool and tool.Parent ~= char then
-                hum:EquipTool(tool)
-            end
-
-            -- Cycle to next tool each tick
-            currentIndex = currentIndex + 1
-            if currentIndex > #tools then currentIndex = 1 end
-        end)
-
-        _G.EquipSlapsCharConn = player.CharacterAdded:Connect(function(newChar)
-            task.wait(0.5)
-            local hum = newChar:WaitForChild("Humanoid")
-            local tools = getSlapTools()
-            if #tools > 0 then
-                hum:EquipTool(tools[1])
-            end
-        end)
-    else
-        -- Disconnect
-        if _G.EquipSlapsConn then _G.EquipSlapsConn:Disconnect() _G.EquipSlapsConn = nil end
-        if _G.EquipSlapsCharConn then _G.EquipSlapsCharConn:Disconnect() _G.EquipSlapsCharConn = nil end
-
-        -- Move all Slap tools back to backpack
+    -- === ON: ALWAYS EQUIPPED ===
+    local function equip()
         local char = player.Character
         local bp = player:FindFirstChild("Backpack")
-        if char and bp then
-            for _, t in pairs(char:GetChildren()) do
-                if t:IsA("Tool") and t.Name:lower():find("slap") then
-                    t.Parent = bp
-                end
-            end
+        if not char or not bp then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        local tool = bp:FindFirstChild("Glitched Slap") or char:FindFirstChild("Glitched Slap")
+        if tool and tool.Parent ~= char then
+            hum:EquipTool(tool)
         end
     end
+
+    _G.gsConn = RS.Heartbeat:Connect(function()
+        if tick() - (_G.gsLast or 0) >= 0.4 then
+            _G.gsLast = tick()
+            equip()
+        end
+    end)
+
+    _G.gsCharConn = player.CharacterAdded:Connect(function()
+        task.wait(0.6)
+        equip()
+    end)
+
+    local bp = player:FindFirstChild("Backpack")
+    if bp then
+        _G.gsBpAdd = bp.ChildAdded:Connect(equip)
+        _G.gsBpRem = bp.ChildRemoved:Connect(equip)
+    end
+
+    equip()
 end)
-
-
-
-
 
 
         makeBtn("Ghost Cam",501,function(state)
