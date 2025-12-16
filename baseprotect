@@ -1,0 +1,157 @@
+-- BASE PROTECTOR ⚡ FRAME-PERFECT (CLIENT LIMIT)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+--------------------------------------------------
+-- FIND REMOTE
+--------------------------------------------------
+
+local function getRemote(timeout)
+    local start = os.clock()
+    timeout = timeout or 6
+
+    while os.clock() - start < timeout do
+        local pkg = ReplicatedStorage:FindFirstChild("Packages")
+        if pkg then
+            local net = pkg:FindFirstChild("Net")
+            if net then
+                local re = net:FindFirstChild("RE/AdminPanelService/ExecuteCommand")
+                if re and re:IsA("RemoteEvent") then
+                    return re
+                end
+            end
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local Remote = getRemote()
+if not Remote then return end
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "BaseProtector"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.fromOffset(270, 48)
+btn.Position = UDim2.fromOffset(40, 220)
+btn.BackgroundColor3 = Color3.fromRGB(255, 70, 90)
+btn.Text = "fuwatti's Base Protector ⚡ [OFF]"
+btn.Font = Enum.Font.GothamBlack
+btn.TextSize = 20
+btn.TextColor3 = Color3.new(1,1,1)
+btn.Active = true
+btn.Draggable = true
+btn.Parent = gui
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+
+--------------------------------------------------
+-- TOGGLE
+--------------------------------------------------
+
+local enabled = false
+
+btn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    btn.Text = "fuwatti's Base Protector ⚡ [" .. (enabled and "ON" or "OFF") .. "]"
+    btn.BackgroundColor3 = enabled
+        and Color3.fromRGB(255, 120, 120)
+        or Color3.fromRGB(255, 70, 90)
+end)
+
+--------------------------------------------------
+-- TARGETING
+--------------------------------------------------
+
+local function getNearest()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local nearest, dist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - root.Position).Magnitude
+                if d < dist then
+                    dist = d
+                    nearest = plr
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+--------------------------------------------------
+-- FRAME-PERFECT SPAM
+--------------------------------------------------
+
+local COMMANDS = { "rocket", "balloon", "inverse", "tiny" }
+local BURSTS = 2
+
+local triggerFlag = false
+local frameLock = false
+
+--------------------------------------------------
+-- NOTIFICATION DETECTOR (NO SPAM HERE)
+--------------------------------------------------
+
+local notifFolder =
+    PlayerGui:WaitForChild("Notification"):WaitForChild("Notification")
+
+notifFolder.ChildAdded:Connect(function(child)
+    if not enabled then return end
+
+    local label = child:FindFirstChildWhichIsA("TextLabel")
+    if not label then return end
+
+    if label.Text:find("Someone is stealing your") then
+        triggerFlag = true
+    end
+end)
+
+--------------------------------------------------
+-- HEARTBEAT EXECUTION (SAME FRAME)
+--------------------------------------------------
+
+RunService.Heartbeat:Connect(function()
+    if not enabled then
+        triggerFlag = false
+        frameLock = false
+        return
+    end
+
+    if triggerFlag and not frameLock then
+        frameLock = true
+        triggerFlag = false
+
+        local target = getNearest()
+        if target then
+            -- SAME-FRAME BURST
+            for _ = 1, BURSTS do
+                for _, cmd in ipairs(COMMANDS) do
+                    Remote:FireServer(target, cmd)
+                end
+            end
+        end
+
+        -- unlock NEXT frame only
+        RunService.Heartbeat:Once(function()
+            frameLock = false
+        end)
+    end
+end)
+
+print("⚡ Base Protector LOADED — Near Frame-Perfect")
