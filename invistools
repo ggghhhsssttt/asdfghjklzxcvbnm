@@ -1,0 +1,168 @@
+-- LocalScript: Invisible Tools Toggle (Hides ONLY tools from others, not you!)
+-- Execute via executor - button appears bottom-left, draggable.
+-- Click to toggle ON/OFF. Tools you equip will be offset high up (invisible to others).
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local offset = 1100
+local enabled = false
+local connections = {}
+local grips = {}  -- original grips
+local heldTool = nil
+local gripChangedConn = nil
+
+-- GUI: Draggable toggle button (bottom-left)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "InvisibleToolsGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 150, 0, 50)
+toggleButton.Position = UDim2.new(0, 10, 1, -60)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)  -- Red = OFF
+toggleButton.Text = "Invisible Tools\n(OFF)"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.BorderSizePixel = 2
+toggleButton.BorderColor3 = Color3.new(1, 1, 1)
+toggleButton.Parent = screenGui
+
+-- Draggable
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+toggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleButton.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Toggle
+local function toggle()
+    enabled = not enabled
+    if enabled then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)  -- Green = ON
+        toggleButton.Text = "Invisible Tools\n(ON)"
+        startToolHiding()
+    else
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)  -- Red = OFF
+        toggleButton.Text = "Invisible Tools\n(OFF)"
+        stopToolHiding()
+    end
+end
+
+toggleButton.MouseButton1Click:Connect(toggle)
+
+-- Core functions
+local offsetCFrame = CFrame.new(0, offset - 1.5, 1.5) * CFrame.Angles(math.rad(-90), 0, 0)
+
+function startToolHiding()
+    stopToolHiding()  -- Clear old
+
+    connections.toolAdded = LocalPlayer.Character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            task.wait(0.1)
+            hideTool(child)
+        end
+    end)
+end
+
+function hideTool(tool)
+    if not enabled or tool.Parent ~= LocalPlayer.Character then return end
+
+    heldTool = tool
+
+    -- Store original grip (first time only)
+    if not grips[tool] then
+        grips[tool] = tool.Grip
+    end
+
+    local originalGrip = grips[tool]
+    local desiredGrip = originalGrip * offsetCFrame
+
+    -- Stop animations to prevent conflicts
+    for _, track in pairs(LocalPlayer.Character.Humanoid:GetPlayingAnimationTracks()) do
+        track:Stop()
+    end
+    LocalPlayer.Character.Animate.Disabled = true
+
+    -- Set grip and force replication
+    tool.Grip = desiredGrip
+    tool.Parent = LocalPlayer.Backpack
+    tool.Parent = LocalPlayer.Character
+
+    -- Enforce grip (anti-reset)
+    if gripChangedConn then
+        gripChangedConn:Disconnect()
+    end
+    gripChangedConn = tool:GetPropertyChangedSignal("Grip"):Connect(function()
+        task.wait(0.1)
+        if not enabled or tool ~= heldTool or tool.Parent ~= LocalPlayer.Character then return end
+        if tool.Grip ~= desiredGrip then
+            tool.Grip = desiredGrip
+            tool.Parent = LocalPlayer.Backpack
+            tool.Parent = LocalPlayer.Character
+        end
+    end)
+end
+
+function stopToolHiding()
+    for _, conn in pairs(connections) do
+        if conn then conn:Disconnect() end
+    end
+    connections = {}
+    if gripChangedConn then
+        gripChangedConn:Disconnect()
+        gripChangedConn = nil
+    end
+
+    -- Restore current held tool
+    if heldTool and heldTool.Parent then
+        heldTool.Grip = grips[heldTool] or CFrame.new()
+        heldTool.Parent = LocalPlayer.Backpack
+    end
+    heldTool = nil
+
+    -- Re-enable animations
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Animate") then
+        LocalPlayer.Character.Animate.Disabled = false
+    end
+end
+
+-- Handle respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)  -- Wait for full load
+    if LocalPlayer.Character:FindFirstChild("Animate") then
+        LocalPlayer.Character.Animate.Disabled = false
+    end
+    if enabled then
+        startToolHiding()
+    end
+end)
+
+-- Initial setup
+if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Animate") then
+    LocalPlayer.Character.Animate.Disabled = false
+end
+
+print("Invisible Tools loaded! Drag button & click to toggle. (Tools only - YOU stay visible!)")
