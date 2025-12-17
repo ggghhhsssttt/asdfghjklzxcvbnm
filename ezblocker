@@ -1,0 +1,323 @@
+-- COMBINED NAVIGATION + BLOCK + INVISIBLE TOOLS + AUTO-PROMPT CLICK
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local navigating = false
+local animTrack
+local noclipConn
+local Clip = true
+local blockedTarget
+local ANIM_ID = "rbxassetid://126995783634131"
+
+------------------------------------------------
+-- CONFIG
+------------------------------------------------
+local STEP_DELAY = 0.16
+local CONFIRM_RADIUS = 3
+local TOOL_OFFSET = 1100
+
+------------------------------------------------
+-- GUI
+------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "FastNavigateGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Fast Navigate Button
+local button = Instance.new("TextButton", gui)
+button.Size = UDim2.fromOffset(240, 46)
+button.Position = UDim2.fromOffset(40, 300)
+button.Text = "fuwatti ez block [OFF]"
+button.Font = Enum.Font.GothamBold
+button.TextSize = 18
+button.TextColor3 = Color3.new(1,1,1)
+button.BackgroundColor3 = Color3.fromRGB(80,80,140)
+button.Active = true
+button.Draggable = true
+Instance.new("UICorner", button).CornerRadius = UDim.new(0,10)
+
+-- Invisible Tools Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 150, 0, 50)
+toggleButton.Position = UDim2.new(0, 10, 1, -60)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+toggleButton.Text = "Invisible Tools\n(OFF)"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.BorderSizePixel = 2
+toggleButton.BorderColor3 = Color3.new(1, 1, 1)
+toggleButton.Parent = gui
+
+local invisEnabled = false
+local heldTool = nil
+local grips = {}
+local gripChangedConn = nil
+local invisConnections = {}
+
+-- Draggable for Invisible Tools
+local dragging = false
+local dragStart, startPos
+toggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleButton.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Toggle Invisible Tools
+local function startToolHiding()
+    stopToolHiding()
+    invisConnections.toolAdded = player.Character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            task.wait(0.1)
+            hideTool(child)
+        end
+    end)
+end
+
+function hideTool(tool)
+    if not invisEnabled or tool.Parent ~= player.Character then return end
+    heldTool = tool
+    if not grips[tool] then grips[tool] = tool.Grip end
+    local originalGrip = grips[tool]
+    local desiredGrip = originalGrip * CFrame.new(0, TOOL_OFFSET-1.5, 1.5) * CFrame.Angles(math.rad(-90),0,0)
+    tool.Grip = desiredGrip
+    tool.Parent = player.Backpack
+    tool.Parent = player.Character
+
+    if gripChangedConn then gripChangedConn:Disconnect() end
+    gripChangedConn = tool:GetPropertyChangedSignal("Grip"):Connect(function()
+        task.wait(0.1)
+        if not invisEnabled or tool ~= heldTool or tool.Parent ~= player.Character then return end
+        if tool.Grip ~= desiredGrip then
+            tool.Grip = desiredGrip
+            tool.Parent = player.Backpack
+            tool.Parent = player.Character
+        end
+    end)
+end
+
+function stopToolHiding()
+    for _, conn in pairs(invisConnections) do if conn then conn:Disconnect() end end
+    invisConnections = {}
+    if gripChangedConn then gripChangedConn:Disconnect() gripChangedConn = nil end
+    if heldTool and heldTool.Parent then
+        heldTool.Grip = grips[heldTool] or CFrame.new()
+        heldTool.Parent = player.Backpack
+    end
+    heldTool = nil
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+    invisEnabled = not invisEnabled
+    if invisEnabled then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+        toggleButton.Text = "Invisible Tools\n(ON)"
+        startToolHiding()
+    else
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        toggleButton.Text = "Invisible Tools\n(OFF)"
+        stopToolHiding()
+    end
+end)
+
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    if invisEnabled then startToolHiding() end
+end)
+
+------------------------------------------------
+-- NAVIGATION HELPERS
+------------------------------------------------
+local function waitUntilNear(root, pos, radius, timeout)
+    radius = radius or CONFIRM_RADIUS
+    timeout = timeout or 2
+    local start = os.clock()
+    while os.clock() - start < timeout do
+        if (root.Position - pos).Magnitude <= radius then return true end
+        RunService.Heartbeat:Wait()
+    end
+    return false
+end
+local function pulseTeleport(root,pos)
+    root.CFrame = CFrame.new(pos)
+    RunService.Heartbeat:Wait()
+end
+
+local function getNearestPlayer()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local nearest, dist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+            if d < dist then dist=d nearest=plr end
+        end
+    end
+    return nearest
+end
+
+local function getClosestBase(pos)
+    local closest, dist = nil, math.huge
+    for _, base in ipairs(workspace.Plots:GetChildren()) do
+        if base:IsA("Model") then
+            local p = base.PrimaryPart or base:FindFirstChildWhichIsA("BasePart")
+            if p then
+                local d = (pos - p.Position).Magnitude
+                if d<dist then dist=d closest=base end
+            end
+        end
+    end
+    return closest
+end
+
+local function getNearestDecorationOutsideBase(currentBase,pos)
+    local nearest, dist = nil, math.huge
+    for _, base in ipairs(workspace.Plots:GetChildren()) do
+        if base:IsA("Model") and base~=currentBase then
+            for _, d in ipairs(base:GetDescendants()) do
+                if d:IsA("BasePart") and d.Name=="Decoration" then
+                    local mag=(pos-d.Position).Magnitude
+                    if mag<dist then dist=mag nearest=d end
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+------------------------------------------------
+-- NAVIGATION
+------------------------------------------------
+Players.PlayerRemoving:Connect(function(plr)
+    if blockedTarget and plr==blockedTarget then
+        if animTrack then animTrack:Stop() end
+        blockedTarget = nil
+    end
+end)
+
+local function enableNoclip()
+    Clip=false
+    task.wait(0.1)
+    noclipConn = RunService.Stepped:Connect(function()
+        if Clip then return end
+        local char = player.Character
+        if not char then return end
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide=false
+            end
+        end
+    end)
+end
+local function disableNoclip()
+    Clip=true
+    if noclipConn then noclipConn:Disconnect() noclipConn=nil end
+end
+
+local function navigate()
+    if navigating then return end
+    navigating = true
+    enableNoclip()
+    local char=player.Character or player.CharacterAdded:Wait()
+    local hum=char:WaitForChild("Humanoid")
+    local root=char:WaitForChild("HumanoidRootPart")
+
+    -- Equip broom
+    local broom = player.Backpack:FindFirstChild("Witch's Broom") or char:FindFirstChild("Witch's Broom")
+    if broom then hum:EquipTool(broom) end
+
+    -- Animation
+    local animator=hum:FindFirstChildOfClass("Animator") or Instance.new("Animator",hum)
+    local anim=Instance.new("Animation")
+    anim.AnimationId=ANIM_ID
+    animTrack=animator:LoadAnimation(anim)
+    animTrack.Priority=Enum.AnimationPriority.Action
+    animTrack:Play()
+
+    local currentBase=getClosestBase(root.Position)
+    local decoration=getNearestDecorationOutsideBase(currentBase,root.Position)
+    if not decoration then navigating=false return end
+
+    -- STEP 1: SIDE
+    local sidePos=Vector3.new(-391,-7,100)
+    pulseTeleport(root,sidePos)
+    waitUntilNear(root,sidePos)
+    task.wait(STEP_DELAY)
+
+    -- STEP 2: FORWARD + BLOCK
+    local forwardPos=Vector3.new(-399,-7,-16)
+    pulseTeleport(root,forwardPos)
+    waitUntilNear(root,forwardPos)
+    task.wait(STEP_DELAY)
+    blockedTarget=getNearestPlayer()
+    if blockedTarget then
+        pcall(function() StarterGui:SetCore("PromptBlockPlayer",blockedTarget) end)
+    end
+
+    -- STEP 3: DECORATION
+    pulseTeleport(root,decoration.Position+Vector3.new(0,2,0))
+    waitUntilNear(root,decoration.Position,1.5)
+
+    -- Auto click button in BlockingModalScreen on 90% prompt progress
+    local function autoClickPrompt(prompt)
+        local startTime = tick()
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            local progress = (tick()-startTime)/prompt.HoldDuration
+            if progress>=0.9 then
+                pcall(function()
+                    local button = game:GetService("CoreGui")
+                        .BlockingModalScreen.BlockingModalContainer
+                        .BlockingModalContainerWrapper.BlockingModal
+                        .AlertModal.AlertContents.Footer.Buttons["3"]
+                    if button then
+                        button:Activate()
+                    end
+                end)
+                conn:Disconnect()
+            end
+        end)
+    end
+
+    -- Attach to all prompts in workspace
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.HoldDuration>0 then
+            autoClickPrompt(obj)
+        end
+    end
+
+    disableNoclip()
+    navigating=false
+    button.Text="fuwatti ez block [OFF]"
+end
+
+------------------------------------------------
+-- BUTTON
+------------------------------------------------
+button.MouseButton1Click:Connect(function()
+    if navigating then return end
+    button.Text="fuwatti ez block [ON]"
+    navigate()
+end)
+
+print("✅ Full Combined Script Loaded: Navigation + Block + Invisible Tools + Auto-90% Prompt Click")
