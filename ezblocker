@@ -16,7 +16,7 @@ local ANIM_ID = "rbxassetid://126995783634131"
 ------------------------------------------------
 -- CONFIG
 ------------------------------------------------
-local STEP_DELAY = 0.16
+local STEP_DELAY = 0.15
 local CONFIRM_RADIUS = 3
 local TOOL_OFFSET = 1100
 
@@ -241,6 +241,15 @@ local function navigate()
     local char=player.Character or player.CharacterAdded:Wait()
     local hum=char:WaitForChild("Humanoid")
     local root=char:WaitForChild("HumanoidRootPart")
+
+	local root=char:WaitForChild("HumanoidRootPart")
+
+-- SNAP CAMERA 180° (behind character)
+workspace.CurrentCamera.CFrame = CFrame.lookAt(
+    workspace.CurrentCamera.CFrame.Position,
+    workspace.CurrentCamera.CFrame.Position - root.CFrame.LookVector * 180
+)
+
 
     -- Equip broom
     local broom = player.Backpack:FindFirstChild("Witch's Broom") or char:FindFirstChild("Witch's Broom")
