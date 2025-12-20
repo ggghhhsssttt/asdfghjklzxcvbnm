@@ -1,0 +1,255 @@
+-- LocalScript: Auto-Hover + Click Block (ADJUSTABLE LOWER POSITION)
+-- Button: "Auto Hover + Click Block" (toggle ON/OFF)
+-- Right-click button → opens slider to adjust how low the cursor hovers (0% = top, 100% = bottom).
+-- Default: 85% (quite low). Smooth hover + auto-click.
+-- Draggable main button, right middle.
+-- CLICK SPEED CONFIG
+
+-- new stealing versionnnnnnnnnnnnnnnnnnnnnn
+
+-- 0 = instant, 1 = fast, 2+ = slower but safer
+-- HORIZONTAL OFFSET (negative = left, positive = right)
+local X_OFFSET = -60
+
+
+local SNAP_FRAMES = 2
+
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local enabled = false
+local hoverConn = nil
+local hasClickedThisModal = false
+local hoverPercent = -300  -- 0 = top, 100 = bottom of button
+
+-- GUI Main Button
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoBlockGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 220, 0, 70)
+toggleButton.Position = UDim2.new(1, -230, 0.5, -35)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+toggleButton.Text = "Auto Hover + Click Block\n(OFF | Low: 85%)"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.BorderSizePixel = 2
+toggleButton.BorderColor3 = Color3.new(1, 1, 1)
+toggleButton.Parent = screenGui
+
+-- Slider GUI (hidden initially)
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Size = UDim2.new(0, 300, 0, 120)
+sliderFrame.Position = UDim2.new(0.5, -150, 0.5, -60)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+sliderFrame.BorderSizePixel = 2
+sliderFrame.BorderColor3 = Color3.new(1,1,1)
+sliderFrame.Visible = false
+sliderFrame.Parent = screenGui
+
+local sliderTitle = Instance.new("TextLabel")
+sliderTitle.Size = UDim2.new(1,0,0,40)
+sliderTitle.BackgroundTransparency = 1
+sliderTitle.Text = "Adjust Hover Height (Right-click again to close)"
+sliderTitle.TextColor3 = Color3.new(1,1,1)
+sliderTitle.TextScaled = true
+sliderTitle.Font = Enum.Font.GothamBold
+sliderTitle.Parent = sliderFrame
+
+local sliderBar = Instance.new("Frame")
+sliderBar.Size = UDim2.new(0.9,0,0,20)
+sliderBar.Position = UDim2.new(0.05,0,0.5,0)
+sliderBar.BackgroundColor3 = Color3.fromRGB(60,60,60)
+sliderBar.Parent = sliderFrame
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new(hoverPercent/100,0,1,0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+sliderFill.Parent = sliderBar
+
+local sliderKnob = Instance.new("TextButton")
+sliderKnob.Size = UDim2.new(0,30,0,40)
+sliderKnob.Position = UDim2.new(hoverPercent/100, -15, 0, -10)
+sliderKnob.BackgroundColor3 = Color3.new(1,1,1)
+sliderKnob.Text = ""
+sliderKnob.Parent = sliderBar
+
+local percentLabel = Instance.new("TextLabel")
+percentLabel.Size = UDim2.new(1,0,0,30)
+percentLabel.Position = UDim2.new(0,0,1,5)
+percentLabel.BackgroundTransparency = 1
+percentLabel.Text = hoverPercent .. "% (lower = higher %)"
+percentLabel.TextColor3 = Color3.new(1,1,1)
+percentLabel.TextScaled = true
+percentLabel.Parent = sliderFrame
+
+-- Slider dragging
+local sliding = false
+sliderKnob.MouseButton1Down:Connect(function()
+    sliding = true
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliding = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mouseX = input.Position.X
+        local barAbsPos = sliderBar.AbsolutePosition.X
+        local barWidth = sliderBar.AbsoluteSize.X
+        local relative = math.clamp((mouseX - barAbsPos) / barWidth, 0, 1)
+        hoverPercent = math.floor(relative * 100)
+        
+        sliderFill.Size = UDim2.new(relative,0,1,0)
+        sliderKnob.Position = UDim2.new(relative, -15, 0, -10)
+        percentLabel.Text = hoverPercent .. "% (lower = higher %)"
+        toggleButton.Text = "Auto Hover + Click Block\n(" .. (enabled and "ON" or "OFF") .. " | Low: " .. hoverPercent .. "%)"
+    end
+end)
+
+-- Draggable main button
+local dragging, dragStart, startPos = false
+toggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleButton.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Get Block button
+local function getBlockButton()
+    local success, btn = pcall(function()
+        return CoreGui.BlockingModalScreen.BlockingModalContainer.BlockingModalContainerWrapper.BlockingModal.AlertModal.AlertContents.Footer.Buttons["3"]
+    end)
+    if success and btn and btn:IsA("ImageButton") and btn.Visible then
+        return btn
+    end
+    return nil
+end
+
+-- ===== SMART STEAL CHECKS =====
+local STEAL_ANIM_ID = "71186871415348"
+
+local function isStealAnimationPlaying()
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+
+    for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+        if track.Animation
+        and track.Animation.AnimationId
+        and tostring(track.Animation.AnimationId):find(STEAL_ANIM_ID) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isStolenLabelVisible()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("TextLabel")
+        and obj.Name == "Stolen"
+        and obj.Visible then
+            return true
+        end
+    end
+    return false
+end
+
+local function isStealing()
+    return isStolenLabelVisible() and isStealAnimationPlaying()
+end
+
+
+
+-- Monitoring
+local function startMonitoring()
+    if hoverConn then hoverConn:Disconnect() end
+    hasClickedThisModal = false
+    
+    hoverConn = RunService.Heartbeat:Connect(function()
+        if not enabled then return end
+        
+        local blockBtn = getBlockButton()
+        if blockBtn and isStealing() then
+            local absPos = blockBtn.AbsolutePosition
+            local absSize = blockBtn.AbsoluteSize
+            
+            -- Use adjustable percent (0% top → 100% bottom)
+local targetX = absPos.X + absSize.X * 0.5
+local targetY = absPos.Y + absSize.Y * 2
+local targetPos = Vector2.new(targetX, targetY)
+            
+if not hasClickedThisModal then
+    hasClickedThisModal = true
+
+    -- STEP 1: snap slightly above
+    mousemoveabs(targetPos.X, targetPos.Y - 6)
+    for i = 1, SNAP_FRAMES do
+        RunService.Heartbeat:Wait()
+    end
+
+    -- STEP 2: snap exact
+    mousemoveabs(targetPos.X, targetPos.Y)
+    for i = 1, SNAP_FRAMES do
+        RunService.Heartbeat:Wait()
+    end
+
+    -- STEP 3: click (strong)
+    mouse1press()
+    task.wait(0.02)
+    mouse1release()
+end
+
+        else
+            hasClickedThisModal = false
+        end
+    end)
+end
+
+-- Left-click: Toggle ON/OFF
+toggleButton.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    if enabled then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+        toggleButton.Text = "Auto Hover + Click Block\n(ON | Low: " .. hoverPercent .. "%)"
+        startMonitoring()
+    else
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        toggleButton.Text = "Auto Hover + Click Block\n(OFF | Low: " .. hoverPercent .. "%)"
+        if hoverConn then hoverConn:Disconnect() end
+    end
+end)
+
+-- Right-click: Open/Close slider
+toggleButton.MouseButton2Click:Connect(function()
+    sliderFrame.Visible = not sliderFrame.Visible
+end)
+
+print("Adjustable Auto Hover + Click loaded!")
+print("Left-click: Toggle ON/OFF | Right-click: Open slider to adjust how low the cursor goes (0-100%)")
