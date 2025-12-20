@@ -157,9 +157,11 @@ local function waitUntilNear(root, pos, radius, timeout)
     end
     return false
 end
-local function pulseTeleport(root,pos)
-    root.CFrame = CFrame.new(pos)
-    RunService.Heartbeat:Wait()
+
+local function safeTeleport(root, pos)
+	root.CFrame = CFrame.new(pos + Vector3.new(0, 2.5, 0))
+	RunService.Heartbeat:Wait()
+	RunService.Heartbeat:Wait()
 end
 
 local function getNearestPlayer()
@@ -244,13 +246,6 @@ local function navigate()
 
 	local root=char:WaitForChild("HumanoidRootPart")
 
--- SNAP CAMERA 180° (behind character)
-workspace.CurrentCamera.CFrame = CFrame.lookAt(
-    workspace.CurrentCamera.CFrame.Position,
-    workspace.CurrentCamera.CFrame.Position - root.CFrame.LookVector * 180
-)
-
-
     -- Equip broom
     local broom = player.Backpack:FindFirstChild("Witch's Broom") or char:FindFirstChild("Witch's Broom")
     if broom then hum:EquipTool(broom) end
@@ -268,14 +263,14 @@ workspace.CurrentCamera.CFrame = CFrame.lookAt(
     if not decoration then navigating=false return end
 
     -- STEP 1: SIDE
-    local sidePos=Vector3.new(-391,-7,100)
-    pulseTeleport(root,sidePos)
+    local sidePos=Vector3.new(-401, -7, 102)
+    safeTeleport(root,sidePos)
     waitUntilNear(root,sidePos)
     task.wait(STEP_DELAY)
 
     -- STEP 2: FORWARD + BLOCK
-    local forwardPos=Vector3.new(-399,-7,-16)
-    pulseTeleport(root,forwardPos)
+    local forwardPos=Vector3.new(-402, -7, 6)
+    safeTeleport(root,forwardPos)
     waitUntilNear(root,forwardPos)
     task.wait(STEP_DELAY)
     blockedTarget=getNearestPlayer()
@@ -284,36 +279,9 @@ workspace.CurrentCamera.CFrame = CFrame.lookAt(
     end
 
     -- STEP 3: DECORATION
-    pulseTeleport(root,decoration.Position+Vector3.new(0,2,0))
+    safeTeleport(root,decoration.Position+Vector3.new(0,2,0))
     waitUntilNear(root,decoration.Position,1.5)
 
-    -- Auto click button in BlockingModalScreen on 90% prompt progress
-    local function autoClickPrompt(prompt)
-        local startTime = tick()
-        local conn
-        conn = RunService.Heartbeat:Connect(function()
-            local progress = (tick()-startTime)/prompt.HoldDuration
-            if progress>=0.9 then
-                pcall(function()
-                    local button = game:GetService("CoreGui")
-                        .BlockingModalScreen.BlockingModalContainer
-                        .BlockingModalContainerWrapper.BlockingModal
-                        .AlertModal.AlertContents.Footer.Buttons["3"]
-                    if button then
-                        button:Activate()
-                    end
-                end)
-                conn:Disconnect()
-            end
-        end)
-    end
-
-    -- Attach to all prompts in workspace
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") and obj.HoldDuration>0 then
-            autoClickPrompt(obj)
-        end
-    end
 
     disableNoclip()
     navigating=false
@@ -335,6 +303,7 @@ print("✅ Full Combined Script Loaded: Navigation + Block + Invisible Tools + A
 ------------------------------------------------
 -- SMART FUWATTI EZ BLOCK (ONE-TIME PER ENABLE)
 ------------------------------------------------
+local sawZeroThisEnable = false
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 
@@ -356,22 +325,25 @@ Instance.new("UICorner", smartBtn).CornerRadius = UDim.new(0,10)
 
 smartBtn.MouseButton1Click:Connect(function()
 	smartEnabled = not smartEnabled
+
 	smartBtn.Text = smartEnabled
 		and "Smart Fuwatti EZ Block [ON]"
 		or "Smart Fuwatti EZ Block [OFF]"
+
 	smartBtn.BackgroundColor3 = smartEnabled
 		and Color3.fromRGB(80,160,80)
 		or Color3.fromRGB(120,80,80)
 
-	-- Reset trigger only when toggling ON
 	if smartEnabled then
+		-- 🔥 FULL RESET PER ENABLE
 		triggeredThisEnable = false
+		waitingForZero = true
+		armed = false
+		sawZeroThisEnable = false
+		lastScale = 1 -- force edge detection reset
 	end
 end)
 
-------------------------------------------------
--- BAR SPY LOOP
-------------------------------------------------
 RunService.Heartbeat:Connect(function()
 	if not smartEnabled or navigating then return end
 
@@ -382,14 +354,30 @@ RunService.Heartbeat:Connect(function()
 
 	local scale = fill.Size.X.Scale
 
-	-- Trigger at ~55% (only once per enable)
-	if scale >= 0.55 and not triggeredThisEnable then
+	-- 1️⃣ WAIT FOR ZERO AFTER ENABLE
+	if not sawZeroThisEnable then
+		if scale <= 0.01 then
+			sawZeroThisEnable = true
+			armed = true
+			lastScale = scale
+		end
+		return
+	end
+
+	-- 2️⃣ EDGE TRIGGER @ 55%
+	if armed
+		and not triggeredThisEnable
+		and lastScale < 0.43
+		and scale >= 0.43
+	then
 		triggeredThisEnable = true
+		armed = false
+
 		task.spawn(function()
 			button.Text = "fuwatti ez block [ON]"
-			navigate() -- 🔥 YOUR TELEPORT + BLOCK LOGIC
+			navigate()
 		end)
 	end
+
+	lastScale = scale
 end)
-
-
