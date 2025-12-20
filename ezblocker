@@ -333,12 +333,13 @@ print("✅ Full Combined Script Loaded: Navigation + Block + Invisible Tools + A
 
 
 ------------------------------------------------
--- SMART FUWATTI EZ BLOCK
+-- SMART FUWATTI EZ BLOCK (ONE-TIME PER ENABLE)
 ------------------------------------------------
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 
 local smartEnabled = false
-local triggeredThisCycle = false
+local triggeredThisEnable = false -- reset only when toggled
 
 -- Button
 local smartBtn = Instance.new("TextButton", gui)
@@ -361,6 +362,11 @@ smartBtn.MouseButton1Click:Connect(function()
 	smartBtn.BackgroundColor3 = smartEnabled
 		and Color3.fromRGB(80,160,80)
 		or Color3.fromRGB(120,80,80)
+
+	-- Reset trigger only when toggling ON
+	if smartEnabled then
+		triggeredThisEnable = false
+	end
 end)
 
 ------------------------------------------------
@@ -376,18 +382,14 @@ RunService.Heartbeat:Connect(function()
 
 	local scale = fill.Size.X.Scale
 
-	-- Trigger at ~55%
-	if scale >= 0.55 and not triggeredThisCycle then
-		triggeredThisCycle = true
+	-- Trigger at ~55% (only once per enable)
+	if scale >= 0.55 and not triggeredThisEnable then
+		triggeredThisEnable = true
 		task.spawn(function()
 			button.Text = "fuwatti ez block [ON]"
 			navigate() -- 🔥 YOUR TELEPORT + BLOCK LOGIC
 		end)
 	end
-
-	-- Reset when bar empties
-	if scale < 0.1 then
-		triggeredThisCycle = false
-	end
 end)
+
 
