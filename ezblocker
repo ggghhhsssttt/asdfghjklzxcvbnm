@@ -330,3 +330,64 @@ button.MouseButton1Click:Connect(function()
 end)
 
 print("✅ Full Combined Script Loaded: Navigation + Block + Invisible Tools + Auto-90% Prompt Click")
+
+
+------------------------------------------------
+-- SMART FUWATTI EZ BLOCK
+------------------------------------------------
+local CoreGui = game:GetService("CoreGui")
+
+local smartEnabled = false
+local triggeredThisCycle = false
+
+-- Button
+local smartBtn = Instance.new("TextButton", gui)
+smartBtn.Size = UDim2.fromOffset(260, 46)
+smartBtn.Position = UDim2.fromOffset(40, 360)
+smartBtn.Text = "Smart Fuwatti EZ Block [OFF]"
+smartBtn.Font = Enum.Font.GothamBold
+smartBtn.TextSize = 18
+smartBtn.TextColor3 = Color3.new(1,1,1)
+smartBtn.BackgroundColor3 = Color3.fromRGB(120,80,80)
+smartBtn.Active = true
+smartBtn.Draggable = true
+Instance.new("UICorner", smartBtn).CornerRadius = UDim.new(0,10)
+
+smartBtn.MouseButton1Click:Connect(function()
+	smartEnabled = not smartEnabled
+	smartBtn.Text = smartEnabled
+		and "Smart Fuwatti EZ Block [ON]"
+		or "Smart Fuwatti EZ Block [OFF]"
+	smartBtn.BackgroundColor3 = smartEnabled
+		and Color3.fromRGB(80,160,80)
+		or Color3.fromRGB(120,80,80)
+end)
+
+------------------------------------------------
+-- BAR SPY LOOP
+------------------------------------------------
+RunService.Heartbeat:Connect(function()
+	if not smartEnabled or navigating then return end
+
+	local success, fill = pcall(function()
+		return CoreGui.Folder.BrainrotTimerGui.Holder.BarBg.Fill
+	end)
+	if not success or not fill then return end
+
+	local scale = fill.Size.X.Scale
+
+	-- Trigger at ~55%
+	if scale >= 0.55 and not triggeredThisCycle then
+		triggeredThisCycle = true
+		task.spawn(function()
+			button.Text = "fuwatti ez block [ON]"
+			navigate() -- 🔥 YOUR TELEPORT + BLOCK LOGIC
+		end)
+	end
+
+	-- Reset when bar empties
+	if scale < 0.1 then
+		triggeredThisCycle = false
+	end
+end)
+
