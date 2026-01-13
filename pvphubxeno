@@ -531,13 +531,13 @@ local function equipGlitchedSlap()
     local bp = player:FindFirstChild("Backpack")
     if not bp then return nil end
 
-    local tool = bp:FindFirstChild("Glitched Slap")
+    local tool = bp:FindFirstChild("Bat")
     if tool then
         pcall(function() tool.Parent = char end)
         return tool
     end
 
-    return char:FindFirstChild("Glitched Slap")
+    return char:FindFirstChild("Bat")
 end
 
 -- Apply your BodyAngularVelocity rotation each frame for a short duration so it actually turns
