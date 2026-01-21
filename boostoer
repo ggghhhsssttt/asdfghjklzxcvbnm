@@ -1,0 +1,669 @@
+-- Fuwatti Booster (Standalone LocalScript)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+--------------------------------------------------
+-- SETTINGS
+--------------------------------------------------
+local HORIZONTAL_SPEED = 55
+local VERTICAL_SPEED = 100
+local STOP_DISTANCE = 4.5
+
+local WALK_SPEED = 57
+local JUMP_SPEED = 20
+
+local STEAL_ANIM_ID = "rbxassetid://71186871415348"
+local STEAL_SPEED = 29
+local AUTO_BAT_RANGE = 9.7
+
+--------------------------------------------------
+-- STATE
+--------------------------------------------------
+local speedEnabled = false
+local speedConn
+local boosting = false
+local boostConn
+local lockedTarget
+local stealEnabled = false
+local stealActiveInternal = false
+local stealConn
+local shiftingEnabled = false
+local autoBatEnabled = false
+local smartAutoBatEnabled = false
+local rotationConn
+local speedWasEnabledBeforeBoost = false
+local autoBatWasEnabledBeforeBoost = false
+local smartAutoBatWasEnabledBeforeBoost = false
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "FuwattiBoosterGUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 260, 0, 590)
+frame.Position = UDim2.new(0.5, -130, 0.5, -295)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundTransparency = 1
+title.Text = "Fuwatti Booster"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextColor3 = Color3.fromRGB(200,150,255)
+title.Parent = frame
+
+--------------------------------------------------
+-- BUTTONS
+--------------------------------------------------
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1,-20,0,45)
+toggleBtn.Position = UDim2.new(0,10,0,45)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(80,0,150)
+toggleBtn.Text = "BOOST [OFF]"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 18
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Parent = frame
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0,10)
+
+local speedBtn = Instance.new("TextButton")
+speedBtn.Size = UDim2.new(1, -20, 0, 45)
+speedBtn.Position = UDim2.new(0, 10, 0, 100)
+speedBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+speedBtn.Text = "SPEED [OFF]"
+speedBtn.TextColor3 = Color3.new(1,1,1)
+speedBtn.Font = Enum.Font.GothamBold
+speedBtn.TextSize = 18
+speedBtn.Parent = frame
+Instance.new("UICorner", speedBtn).CornerRadius = UDim.new(0, 12)
+
+local stealBtn = Instance.new("TextButton")
+stealBtn.Size = UDim2.new(1,-20,0,40)
+stealBtn.Position = UDim2.new(0,10,0,230)
+stealBtn.BackgroundColor3 = Color3.fromRGB(120,60,60)
+stealBtn.Text = "STEAL SPEED [OFF]"
+stealBtn.TextColor3 = Color3.new(1,1,1)
+stealBtn.Font = Enum.Font.GothamBold
+stealBtn.TextSize = 16
+stealBtn.Parent = frame
+Instance.new("UICorner", stealBtn).CornerRadius = UDim.new(0,10)
+
+local shiftBtn = Instance.new("TextButton")
+shiftBtn.Size = UDim2.new(1,-20,0,40)
+shiftBtn.Position = UDim2.new(0,10,0,315)
+shiftBtn.BackgroundColor3 = Color3.fromRGB(60,120,60)
+shiftBtn.Text = "SHIFTING [OFF]"
+shiftBtn.TextColor3 = Color3.new(1,1,1)
+shiftBtn.Font = Enum.Font.GothamBold
+shiftBtn.TextSize = 16
+shiftBtn.Parent = frame
+Instance.new("UICorner", shiftBtn).CornerRadius = UDim.new(0,10)
+
+local autoBatBtn = Instance.new("TextButton")
+autoBatBtn.Size = UDim2.new(1,-20,0,40)
+autoBatBtn.Position = UDim2.new(0,10,0,445)
+autoBatBtn.BackgroundColor3 = Color3.fromRGB(60,120,90)
+autoBatBtn.Text = "AUTO BAT [OFF]"
+autoBatBtn.TextColor3 = Color3.new(1,1,1)
+autoBatBtn.Font = Enum.Font.GothamBold
+autoBatBtn.TextSize = 16
+autoBatBtn.Parent = frame
+Instance.new("UICorner", autoBatBtn).CornerRadius = UDim.new(0,10)
+
+local smartAutoBatBtn = Instance.new("TextButton")
+smartAutoBatBtn.Size = UDim2.new(1,-20,0,40)
+smartAutoBatBtn.Position = UDim2.new(0,10,0,495)
+smartAutoBatBtn.BackgroundColor3 = Color3.fromRGB(90,60,120)
+smartAutoBatBtn.Text = "SMART AUTO BAT [OFF]"
+smartAutoBatBtn.TextColor3 = Color3.new(1,1,1)
+smartAutoBatBtn.Font = Enum.Font.GothamBold
+smartAutoBatBtn.TextSize = 16
+smartAutoBatBtn.Parent = frame
+Instance.new("UICorner", smartAutoBatBtn).CornerRadius = UDim.new(0,10)
+
+--------------------------------------------------
+-- HELPER FUNCTIONS
+--------------------------------------------------
+local function updateRotation(targetHRP)
+	local char = player.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root or not targetHRP then return end
+
+	local direction = (targetHRP.Position - root.Position)
+	local targetYaw = math.atan2(-direction.X, -direction.Z)
+	local currentYaw = math.rad(root.Orientation.Y)
+	local diff = targetYaw - currentYaw
+	local spinSpeed = math.clamp(diff * 40, -120, 120)
+
+	local spin = root:FindFirstChild("Spinning")
+	if not spin then
+		spin = Instance.new("BodyAngularVelocity")
+		spin.Name = "Spinning"
+		spin.MaxTorque = Vector3.new(0, math.huge, 0)
+		spin.P = 9e4
+		spin.Parent = root
+	end
+	spin.AngularVelocity = Vector3.new(0, spinSpeed, 0)
+end
+
+local function getNearestPlayer()
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	local hrp = char.HumanoidRootPart
+	local closest, dist = nil, math.huge
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+			local d = (plr.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
+			if d < dist then
+				dist = d
+				closest = plr
+			end
+		end
+	end
+	return closest
+end
+
+local function equipAndHit()
+	local char = player.Character
+	if not char then return end
+	local tool = char:FindFirstChild("Bat") or player.Backpack:FindFirstChild("Bat")
+	if tool then
+		tool.Parent = char
+		task.wait(0.1)
+		tool:Activate()
+	end
+end
+
+local function enableSpeed()
+	if speedConn then return end
+	local char = player.Character
+	if not char then return end
+	local hrp = char:WaitForChild("HumanoidRootPart")
+	local hum = char:WaitForChild("Humanoid")
+	hum.PlatformStand = false
+
+	speedConn = RunService.Heartbeat:Connect(function()
+		if not hrp or not hum then return end
+		local moveDir = hum.MoveDirection
+		local vel = Vector3.new(moveDir.X * WALK_SPEED, hrp.Velocity.Y, moveDir.Z * WALK_SPEED)
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then
+			vel = vel + Vector3.new(0, JUMP_SPEED, 0)
+		elseif UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+			vel = vel + Vector3.new(0, -JUMP_SPEED, 0)
+		end
+		hrp.Velocity = Vector3.new(hrp.Velocity:Lerp(vel, 0.55).X, hrp.Velocity.Y, hrp.Velocity:Lerp(vel, 0.55).Z)
+	end)
+end
+
+local function disableSpeed()
+	if speedConn then
+		speedConn:Disconnect()
+		speedConn = nil
+	end
+end
+
+--------------------------------------------------
+-- BOOST
+--------------------------------------------------
+local function stopBoost()
+	if boostConn then boostConn:Disconnect() boostConn = nil end
+	boosting = false
+	lockedTarget = nil
+	toggleBtn.Text = "BOOST [OFF]"
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(80,0,150)
+
+	if speedWasEnabledBeforeBoost then
+		speedEnabled = true
+		enableSpeed()
+		speedBtn.Text = "SPEED [ON]"
+		speedBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+		speedWasEnabledBeforeBoost = false
+	end
+	if autoBatWasEnabledBeforeBoost then
+		autoBatEnabled = true
+		autoBatBtn.Text = "AUTO BAT [ON]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(0,180,120)
+		autoBatWasEnabledBeforeBoost = false
+	end
+	if smartAutoBatWasEnabledBeforeBoost then
+		smartAutoBatEnabled = true
+		smartAutoBatBtn.Text = "SMART AUTO BAT [ON]"
+		smartAutoBatBtn.BackgroundColor3 = Color3.fromRGB(140,80,180)
+		smartAutoBatWasEnabledBeforeBoost = false
+	end
+end
+
+local function startBoost()
+	if boosting then return end
+	boosting = true
+
+	if speedEnabled then
+		speedWasEnabledBeforeBoost = true
+		speedEnabled = false
+		disableSpeed()
+		speedBtn.Text = "SPEED [OFF]"
+		speedBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+	end
+	if autoBatEnabled then
+		autoBatWasEnabledBeforeBoost = true
+		autoBatEnabled = false
+		autoBatBtn.Text = "AUTO BAT [OFF]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(60,120,90)
+	end
+	if smartAutoBatEnabled then
+		smartAutoBatWasEnabledBeforeBoost = true
+		smartAutoBatEnabled = false
+		smartAutoBatBtn.Text = "SMART AUTO BAT [OFF]"
+		smartAutoBatBtn.BackgroundColor3 = Color3.fromRGB(90,60,120)
+	end
+
+	local char = player.Character
+	if not char then stopBoost() return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then stopBoost() return end
+	lockedTarget = getNearestPlayer()
+	if not lockedTarget then stopBoost() return end
+
+	boostConn = RunService.Heartbeat:Connect(function()
+		if not lockedTarget or not lockedTarget.Character or not lockedTarget.Character:FindFirstChild("HumanoidRootPart") then
+			stopBoost() return
+		end
+		local targetHRP = lockedTarget.Character.HumanoidRootPart
+		local offset = targetHRP.Position - hrp.Position
+		local dist = offset.Magnitude
+		if dist <= STOP_DISTANCE then
+			updateRotation(targetHRP)
+			equipAndHit()
+			local spin = hrp:FindFirstChild("Spinning")
+			if spin then spin:Destroy() end
+			stopBoost()
+			return
+		end
+		updateRotation(targetHRP)
+		local dir = offset.Unit
+		local vel = Vector3.new(dir.X * HORIZONTAL_SPEED, math.clamp(dir.Y * VERTICAL_SPEED, -VERTICAL_SPEED, VERTICAL_SPEED), dir.Z * HORIZONTAL_SPEED)
+		hrp.Velocity = hrp.Velocity:Lerp(vel, 0.55)
+	end)
+end
+
+--------------------------------------------------
+-- STEAL SPEED
+--------------------------------------------------
+local function isStealAnimPlaying()
+	local char = player.Character
+	if not char then return false end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum then return false end
+	local animator = hum:FindFirstChildOfClass("Animator")
+	if not animator then return false end
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+		if track.Animation and track.Animation.AnimationId == STEAL_ANIM_ID then return true end
+	end
+	return false
+end
+
+local function updateStealIndicator()
+	if shiftingEnabled then
+		stealBtn.Text = stealActiveInternal and "STEAL SPEED [ON] 🔴" or "STEAL SPEED [OFF]"
+	else
+		if stealActiveInternal then
+			stealBtn.Text = "STEAL SPEED [ON] 🔴"
+		else
+			stealBtn.Text = stealEnabled and "STEAL SPEED [ON]" or "STEAL SPEED [OFF]"
+		end
+	end
+end
+
+local function enableStealSpeed()
+	if stealConn then return end
+	stealConn = RunService.Heartbeat:Connect(function()
+		local char = player.Character
+		if not char then return end
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local hum = char:FindFirstChild("Humanoid")
+		if not hrp or not hum then return end
+		local animPlaying = isStealAnimPlaying()
+		if animPlaying and not stealActiveInternal then
+			stealActiveInternal = true
+			updateStealIndicator()
+		end
+		if not animPlaying and stealActiveInternal then
+			stealActiveInternal = false
+			updateStealIndicator()
+		end
+		if stealActiveInternal then
+			local dir = hum.MoveDirection
+			local vel = Vector3.new(dir.X * STEAL_SPEED, hrp.Velocity.Y, dir.Z * STEAL_SPEED)
+			hrp.Velocity = hrp.Velocity:Lerp(vel, 0.65)
+		end
+	end)
+end
+
+local function disableStealSpeed()
+	if stealConn then stealConn:Disconnect() stealConn = nil end
+	stealActiveInternal = false
+	updateStealIndicator()
+end
+
+--------------------------------------------------
+-- SHIFTING
+--------------------------------------------------
+local shiftingConn
+local function enableShifting()
+	if shiftingConn then return end
+	speedEnabled = true
+	enableSpeed()
+	speedBtn.Text = "SPEED [ON]"
+	speedBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+	stealEnabled = true
+	enableStealSpeed()
+	stealBtn.Text = "STEAL SPEED [OFF]"
+	stealBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
+
+	shiftingConn = RunService.Heartbeat:Connect(function()
+		if boosting then return end
+		local animPlaying = isStealAnimPlaying()
+		if animPlaying and speedEnabled then
+			speedEnabled = false
+			disableSpeed()
+			speedBtn.Text = "SPEED [OFF]"
+			speedBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+			stealBtn.Text = "STEAL SPEED [ON] 🔴"
+		end
+		if not animPlaying and not speedEnabled and not stealActiveInternal then
+			speedEnabled = true
+			enableSpeed()
+			speedBtn.Text = "SPEED [ON]"
+			speedBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+			stealBtn.Text = "STEAL SPEED [OFF]"
+		end
+	end)
+end
+
+local function disableShifting()
+	if shiftingConn then shiftingConn:Disconnect() shiftingConn = nil end
+	if speedEnabled then
+		speedEnabled = false
+		disableSpeed()
+		speedBtn.Text = "SPEED [OFF]"
+		speedBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+	end
+	if stealEnabled then
+		stealEnabled = false
+		disableStealSpeed()
+		stealBtn.Text = "STEAL SPEED [OFF]"
+		stealBtn.BackgroundColor3 = Color3.fromRGB(120,60,60)
+	end
+end
+
+--------------------------------------------------
+-- AUTO BAT
+--------------------------------------------------
+local function stripLayeredClothes()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then
+			for _, item in ipairs(plr.Character:GetChildren()) do
+				if item:IsA("Accessory") then
+					local at = item.AccessoryType
+					if at == Enum.AccessoryType.TShirt or at == Enum.AccessoryType.Shirt or at == Enum.AccessoryType.Jacket or at == Enum.AccessoryType.Sweater or at == Enum.AccessoryType.Pants or (item:FindFirstChild("Handle") and item.Handle:FindFirstChild("WrapTarget")) then
+						pcall(function() item:Destroy() end)
+					end
+				end
+			end
+		end
+	end
+end
+
+local function getClosestPlayer(distLimit)
+	local char = player.Character
+	if not char then return nil end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return nil end
+	local closest, bestDist = nil, distLimit
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+			local dist = (plr.Character.HumanoidRootPart.Position - root.Position).Magnitude
+			if dist < bestDist then
+				closest = plr
+				bestDist = dist
+			end
+		end
+	end
+	return closest
+end
+
+local function equipBat()
+	local char = player.Character
+	if not char then return nil end
+	local bp = player:FindFirstChild("Backpack")
+	if not bp then return nil end
+	local bat = bp:FindFirstChild("Bat")
+	if bat then
+		pcall(function() bat.Parent = char end)
+		return bat
+	end
+	return char:FindFirstChild("Bat")
+end
+
+local function unequipBat()
+	local char = player.Character
+	if not char then return end
+	local bat = char:FindFirstChild("Bat")
+	local bp = player:FindFirstChild("Backpack")
+	if bat and bp then
+		pcall(function() bat.Parent = bp end)
+	end
+end
+
+local function updateAutoBatRotation()
+	local char = player.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	local closestPlayer = getClosestPlayer(12)
+	if not closestPlayer then
+		local spin = root:FindFirstChild("Spinning")
+		if spin then spin:Destroy() end
+		return
+	end
+	local targetRoot = closestPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not targetRoot then return end
+	local direction = (targetRoot.Position - root.Position)
+	local targetYaw = math.atan2(-direction.X, -direction.Z)
+	local currentYaw = root.Orientation.Y * math.pi/180
+	local diff = targetYaw - currentYaw
+	local speed = math.clamp(diff * 25, -80, 80)
+	local old = root:FindFirstChild("Spinning")
+	if old then old:Destroy() end
+	local spin = Instance.new("BodyAngularVelocity")
+	spin.Name = "Spinning"
+	spin.Parent = root
+	spin.MaxTorque = Vector3.new(0, math.huge, 0)
+	spin.AngularVelocity = Vector3.new(0, speed, 0)
+end
+
+task.spawn(function()
+	while RunService.Heartbeat:Wait() do
+		if not autoBatEnabled then continue end
+		local bat = equipBat()
+		if not bat then continue end
+		local target = getClosestPlayer(AUTO_BAT_RANGE)
+		if target then pcall(function() bat:Activate() end) end
+	end
+end)
+
+task.spawn(function()
+	while RunService.Heartbeat:Wait() do
+		if not smartAutoBatEnabled then continue end
+		local target = getClosestPlayer(AUTO_BAT_RANGE)
+		if target then
+			local bat = equipBat()
+			if bat then pcall(function() bat:Activate() end) end
+		else
+			unequipBat()
+		end
+	end
+end)
+
+--------------------------------------------------
+-- BUTTONS
+--------------------------------------------------
+toggleBtn.MouseButton1Click:Connect(function()
+	if boosting then stopBoost() else
+		toggleBtn.Text = "BOOST [ON]"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(120,0,200)
+		startBoost()
+	end
+end)
+
+speedBtn.MouseButton1Click:Connect(function()
+	if shiftingEnabled then return end
+	speedEnabled = not speedEnabled
+	if speedEnabled then
+		enableSpeed()
+		speedBtn.Text = "SPEED [ON]"
+		speedBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+	else
+		disableSpeed()
+		speedBtn.Text = "SPEED [OFF]"
+		speedBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+	end
+end)
+
+stealBtn.MouseButton1Click:Connect(function()
+	if shiftingEnabled then return end
+	stealEnabled = not stealEnabled
+	if stealEnabled then
+		enableStealSpeed()
+		stealBtn.Text = "STEAL SPEED [ON]"
+		stealBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
+	else
+		disableStealSpeed()
+		stealBtn.Text = "STEAL SPEED [OFF]"
+		stealBtn.BackgroundColor3 = Color3.fromRGB(120,60,60)
+	end
+end)
+
+shiftBtn.MouseButton1Click:Connect(function()
+	shiftingEnabled = not shiftingEnabled
+	if shiftingEnabled then
+		enableShifting()
+		shiftBtn.Text = "SHIFTING [ON]"
+		shiftBtn.BackgroundColor3 = Color3.fromRGB(80,170,80)
+	else
+		disableShifting()
+		shiftBtn.Text = "SHIFTING [OFF]"
+		shiftBtn.BackgroundColor3 = Color3.fromRGB(60,120,60)
+	end
+end)
+
+autoBatBtn.MouseButton1Click:Connect(function()
+	autoBatEnabled = not autoBatEnabled
+	if autoBatEnabled then
+		stripLayeredClothes()
+		autoBatBtn.Text = "AUTO BAT [ON]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(0,180,120)
+		if rotationConn then rotationConn:Disconnect() end
+		rotationConn = RunService.RenderStepped:Connect(updateAutoBatRotation)
+	else
+		autoBatBtn.Text = "AUTO BAT [OFF]"
+		autoBatBtn.BackgroundColor3 = Color3.fromRGB(60,120,90)
+		if rotationConn then rotationConn:Disconnect() end
+		local char = player.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local spin = char.HumanoidRootPart:FindFirstChild("Spinning")
+			if spin then spin:Destroy() end
+		end
+	end
+end)
+
+smartAutoBatBtn.MouseButton1Click:Connect(function()
+	smartAutoBatEnabled = not smartAutoBatEnabled
+	if smartAutoBatEnabled then
+		stripLayeredClothes()
+		smartAutoBatBtn.Text = "SMART AUTO BAT [ON]"
+		smartAutoBatBtn.BackgroundColor3 = Color3.fromRGB(140,80,180)
+		if rotationConn then rotationConn:Disconnect() end
+		rotationConn = RunService.RenderStepped:Connect(updateAutoBatRotation)
+	else
+		smartAutoBatBtn.Text = "SMART AUTO BAT [OFF]"
+		smartAutoBatBtn.BackgroundColor3 = Color3.fromRGB(90,60,120)
+		if rotationConn then rotationConn:Disconnect() end
+		local char = player.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local spin = char.HumanoidRootPart:FindFirstChild("Spinning")
+			if spin then spin:Destroy() end
+		end
+		unequipBat()
+	end
+end)
+
+--------------------------------------------------
+-- SLIDERS
+--------------------------------------------------
+local function createSlider(yPos, labelText, color, minVal, maxVal, default, onChange)
+	local sliderFrame = Instance.new("Frame")
+	sliderFrame.Size = UDim2.new(1, -20, 0, 18)
+	sliderFrame.Position = UDim2.new(0, 10, 0, yPos)
+	sliderFrame.BackgroundColor3 = Color3.fromRGB(50,50,50)
+	sliderFrame.Parent = frame
+	Instance.new("UICorner", sliderFrame).CornerRadius = UDim.new(0,6)
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new((default-minVal)/(maxVal-minVal), 0, 1, 0)
+	bar.BackgroundColor3 = color
+	bar.Parent = sliderFrame
+	Instance.new("UICorner", bar)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1,0,0,18)
+	label.Position = UDim2.new(0,0,1,2)
+	label.BackgroundTransparency = 1
+	label.Text = labelText .. ": " .. default
+	label.TextColor3 = Color3.new(1,1,1)
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 14
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = sliderFrame
+	local dragging = false
+	local function update(x)
+		local pct = math.clamp((x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+		local value = math.floor((minVal + pct * (maxVal - minVal)) + 0.5)
+		bar.Size = UDim2.new(pct, 0, 1, 0)
+		label.Text = labelText .. ": " .. value
+		onChange(value)
+	end
+	sliderFrame.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			update(i.Position.X)
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+			update(i.Position.X)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+createSlider(150, "Walk", Color3.fromRGB(0,140,255), 10, 150, WALK_SPEED, function(v) WALK_SPEED = v end)
+createSlider(190, "Jump", Color3.fromRGB(140,0,255), 10, 140, JUMP_SPEED, function(v) JUMP_SPEED = v end)
+createSlider(275, "StealSpeed", Color3.fromRGB(255,80,80), 1, 60, STEAL_SPEED, function(v) STEAL_SPEED = v end)
+createSlider(360, "AutoBatRange", Color3.fromRGB(0,180,120), 5, 15, AUTO_BAT_RANGE, function(v) AUTO_BAT_RANGE = v end)
