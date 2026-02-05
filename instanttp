@@ -1,0 +1,1037 @@
+-- Velocity Path Mover (Improved UI)
+
+local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+
+-- Modern Purple Theme
+local THEME = {
+    bg = Color3.fromRGB(15, 15, 20),
+    surface = Color3.fromRGB(25, 20, 35),
+    surfaceLight = Color3.fromRGB(35, 30, 50),
+    primary = Color3.fromRGB(138, 80, 230),
+    primaryHover = Color3.fromRGB(158, 100, 250),
+    primaryDark = Color3.fromRGB(110, 60, 200),
+    accent = Color3.fromRGB(180, 120, 255),
+    success = Color3.fromRGB(100, 220, 150),
+    warning = Color3.fromRGB(255, 180, 80),
+    danger = Color3.fromRGB(255, 90, 110),
+    text = Color3.fromRGB(240, 235, 255),
+    textDim = Color3.fromRGB(160, 150, 190),
+    stroke = Color3.fromRGB(80, 60, 120),
+}
+
+-- Settings
+local WALK_SPEED = 211
+local STOP_DISTANCE = 4
+local LERP_ALPHA = 0.55
+local STUCK_TIME = 0.6
+local STUCK_DISTANCE = 1
+local WAYPOINT_SPACING = 4
+local CAMERA_LERP = 0.15
+
+-- Lag Settings
+local lagModeEnabled = false
+local autoLagEnabled = false
+local uniqueIdentifier = "v15g2119-134z-bx1c-a143-415a31g1l029"
+local dataSize = 4295
+local remoteEventTarget = nil
+
+-- Search for remote in random services
+local searchServices = {
+    game:GetService("GamepadService"),
+    game:GetService("AdService"),
+    game:GetService("CookiesService"),
+    game:GetService("BadgeService")
+}
+
+for _, service in ipairs(searchServices) do
+    for _, gameObject in pairs(service:GetDescendants()) do
+        if gameObject:IsA("RemoteEvent") then
+            remoteEventTarget = gameObject
+            break
+        end
+    end
+    if remoteEventTarget then break end
+end
+
+if not remoteEventTarget then
+    local remoteNames = {"Chat", "FisherMan", "AFK", "WhyAreTheyTargetingMe!!", "RobloxChatSystemMessage"}
+    for _, remoteName in ipairs(remoteNames) do
+        local foundRemote = game:GetDescendants()
+        for _, obj in pairs(foundRemote) do
+            if obj:IsA("RemoteEvent") and obj.Name == remoteName then
+                remoteEventTarget = obj
+                break
+            end
+        end
+        if remoteEventTarget then break end
+    end
+end
+
+-- State
+local targetPoint
+local marker
+local moveConn
+local waypoints
+local wpIndex = 1
+local mode = nil
+local lastPos
+local stuckTimer = 0
+local visualPathParts = {}
+local fixatedWaypoints = {}
+local fixatedIndex = 1
+local fixatedParts = {}
+local currentPath = 1 -- Track which path is active
+local autoPathEnabled = false
+local selectedMode = nil
+local activePrompt = nil
+local startTime = 0
+local promptConnection = nil
+
+-- Helper Functions
+local function getChar()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char, char:WaitForChild("HumanoidRootPart"), char:WaitForChild("Humanoid")
+end
+
+local function createMarker(pos, isAuto)
+    if marker then marker:Destroy() end
+    marker = Instance.new("Part")
+    marker.Anchored = true
+    marker.CanCollide = false
+    marker.Size = Vector3.new(1.5, 1.5, 1.5)
+    marker.Shape = Enum.PartType.Ball
+    marker.Material = Enum.Material.Neon
+    marker.Color = isAuto and THEME.success or THEME.danger
+    marker.Position = pos
+    marker.Parent = workspace
+end
+
+local function clearMarker()
+    if marker then marker:Destroy() marker = nil end
+end
+
+local function clearPathVisuals()
+    for _, part in ipairs(visualPathParts) do
+        if part then part:Destroy() end
+    end
+    visualPathParts = {}
+end
+
+local function visualizePath()
+    clearPathVisuals()
+    if not waypoints then return end
+    
+    for i = 1, #waypoints - 1 do
+        local wp1 = waypoints[i].Position
+        local wp2 = waypoints[i + 1].Position
+        local midpoint = (wp1 + wp2) / 2
+        local distance = (wp2 - wp1).Magnitude
+        
+        local part = Instance.new("Part")
+        part.Anchored = true
+        part.CanCollide = false
+        part.Size = Vector3.new(0.3, 0.3, distance)
+        part.CFrame = CFrame.new(midpoint, wp2)
+        part.Material = Enum.Material.Neon
+        part.Color = THEME.accent
+        part.Transparency = 0.3
+        part.Parent = workspace
+        table.insert(visualPathParts, part)
+    end
+end
+
+local function createFixatedWaypoints()
+    for _, part in ipairs(fixatedParts) do
+        if part then part:Destroy() end
+    end
+    fixatedParts = {}
+    
+    if currentPath == 1 then
+        -- Path 1 waypoints
+        local wp1 = Instance.new("Part")
+        wp1.Position = Vector3.new(-336.747253, -4.62742901, 17.4189644)
+        wp1.Size = Vector3.new(4, 5, 2)
+        wp1.Anchored = true
+        wp1.CanCollide = false
+        wp1.Transparency = 0.5
+        wp1.Color = THEME.success
+        wp1.Material = Enum.Material.Neon
+        wp1.Parent = workspace
+        
+        -- Add "STAND HERE" text
+        local surfaceGui = Instance.new("SurfaceGui")
+        surfaceGui.Face = Enum.NormalId.Front
+        surfaceGui.Parent = wp1
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "STAND HERE"
+        textLabel.TextColor3 = Color3.new(1, 1, 1)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Parent = surfaceGui
+        
+        table.insert(fixatedParts, wp1)
+        
+        local wp2 = Instance.new("Part")
+        wp2.Position = Vector3.new(-347.328796, -6.77127075, 30.6699142)
+        wp2.Size = Vector3.new(4, 5, 2)
+        wp2.Anchored = true
+        wp2.CanCollide = false
+        wp2.Transparency = 0.5
+        wp2.Color = THEME.textDim
+        wp2.Material = Enum.Material.Neon
+        wp2.Parent = workspace
+        table.insert(fixatedParts, wp2)
+        
+        local wp3 = Instance.new("Part")
+        wp3.Position = Vector3.new(-345.328796, -6.77127075, 95.6699142)
+        wp3.Size = Vector3.new(4, 5, 2)
+        wp3.Anchored = true
+        wp3.CanCollide = false
+        wp3.Transparency = 0.5
+        wp3.Color = THEME.textDim
+        wp3.Material = Enum.Material.Neon
+        wp3.Parent = workspace
+        table.insert(fixatedParts, wp3)
+        
+        fixatedWaypoints = {wp1.Position, wp2.Position, wp3.Position}
+    else
+        -- Path 2 waypoints
+        local wp1 = Instance.new("Part")
+        wp1.Position = Vector3.new(-336.328796, -5.77127075, 102.669914)
+        wp1.Size = Vector3.new(4, 5, 2)
+        wp1.Anchored = true
+        wp1.CanCollide = false
+        wp1.Transparency = 0.5
+        wp1.Color = THEME.success
+        wp1.Material = Enum.Material.Neon
+        wp1.Parent = workspace
+        
+        -- Add "STAND HERE" text
+        local surfaceGui = Instance.new("SurfaceGui")
+        surfaceGui.Face = Enum.NormalId.Front
+        surfaceGui.Parent = wp1
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "STAND HERE"
+        textLabel.TextColor3 = Color3.new(1, 1, 1)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Parent = surfaceGui
+        
+        table.insert(fixatedParts, wp1)
+        
+        local wp2 = Instance.new("Part")
+        wp2.Position = Vector3.new(-347.328796, -7.77127075, 89.6699142)
+        wp2.Size = Vector3.new(4, 5, 2)
+        wp2.Anchored = true
+        wp2.CanCollide = false
+        wp2.Transparency = 0.5
+        wp2.Color = THEME.textDim
+        wp2.Material = Enum.Material.Neon
+        wp2.Parent = workspace
+        table.insert(fixatedParts, wp2)
+        
+        local wp3 = Instance.new("Part")
+        wp3.Position = Vector3.new(-347.328796, -7.77127075, 29.6699142)
+        wp3.Size = Vector3.new(4, 5, 2)
+        wp3.Anchored = true
+        wp3.CanCollide = false
+        wp3.Transparency = 0.5
+        wp3.Color = THEME.textDim
+        wp3.Material = Enum.Material.Neon
+        wp3.Parent = workspace
+        table.insert(fixatedParts, wp3)
+        
+        fixatedWaypoints = {wp1.Position, wp2.Position, wp3.Position}
+    end
+    
+    print("Fixated waypoints created! Path " .. currentPath)
+end
+
+createFixatedWaypoints()
+
+local function findBaseSign()
+    for _, plot in ipairs(workspace:WaitForChild("Plots"):GetChildren()) do
+        local sign = plot:FindFirstChild("PlotSign")
+        if sign then
+            local gui = sign:FindFirstChild("YourBase")
+            if gui and gui:IsA("BillboardGui") and gui.Enabled then
+                return sign
+            end
+        end
+    end
+end
+
+local function findCashInBase()
+    local sign = findBaseSign()
+    if not sign then return nil end
+    local basePlot = sign.Parent
+    if not basePlot then return nil end
+    local cashModel = basePlot:FindFirstChild("CashPad", true)
+    if cashModel and cashModel:IsA("Model") then
+        local primaryPart = cashModel.PrimaryPart or cashModel:FindFirstChildWhichIsA("BasePart")
+        if primaryPart then
+            return primaryPart.Position
+        end
+    end
+    return nil
+end
+
+-- GUI Creation
+local gui = Instance.new("ScreenGui", player.PlayerGui)
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Main Frame (Wider and more compact)
+local mainFrame = Instance.new("Frame", gui)
+mainFrame.Size = UDim2.new(0, 420, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -180)
+mainFrame.BackgroundColor3 = THEME.bg
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.ClipsDescendants = true
+
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 16)
+
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = THEME.stroke
+mainStroke.Thickness = 1.5
+mainStroke.Transparency = 0.3
+
+-- Drop shadow effect
+local shadow = Instance.new("ImageLabel", mainFrame)
+shadow.Size = UDim2.new(1, 40, 1, 40)
+shadow.Position = UDim2.new(0, -20, 0, -20)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.8
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+shadow.ZIndex = 0
+
+-- Header
+local header = Instance.new("Frame", mainFrame)
+header.Size = UDim2.new(1, 0, 0, 50)
+header.BackgroundColor3 = THEME.surface
+header.BorderSizePixel = 0
+
+local headerCorner = Instance.new("UICorner", header)
+headerCorner.CornerRadius = UDim.new(0, 16)
+
+local headerCover = Instance.new("Frame", header)
+headerCover.Size = UDim2.new(1, 0, 0, 25)
+headerCover.Position = UDim2.new(0, 0, 1, -25)
+headerCover.BackgroundColor3 = THEME.surface
+headerCover.BorderSizePixel = 0
+
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(1, -20, 1, 0)
+title.Position = UDim2.new(0, 20, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "⚡ INSTANT TP"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextColor3 = THEME.text
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Animated glow line
+local glowLine = Instance.new("Frame", header)
+glowLine.Size = UDim2.new(0, 0, 0, 2)
+glowLine.Position = UDim2.new(0, 0, 1, -2)
+glowLine.BackgroundColor3 = THEME.primary
+glowLine.BorderSizePixel = 0
+
+local glowGradient = Instance.new("UIGradient", glowLine)
+glowGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, THEME.primary),
+    ColorSequenceKeypoint.new(0.5, THEME.accent),
+    ColorSequenceKeypoint.new(1, THEME.primary)
+})
+
+-- Animate glow line
+spawn(function()
+    while true do
+        TweenService:Create(glowLine, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Size = UDim2.new(1, 0, 0, 2)
+        }):Play()
+        wait(2)
+        TweenService:Create(glowLine, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Size = UDim2.new(0, 0, 0, 2)
+        }):Play()
+        wait(2)
+    end
+end)
+
+-- Content Container
+local content = Instance.new("Frame", mainFrame)
+content.Size = UDim2.new(1, 0, 1, -50)
+content.Position = UDim2.new(0, 0, 0, 50)
+content.BackgroundTransparency = 1
+content.BorderSizePixel = 0
+
+-- Button Factory
+local function createButton(parent, text, yPos, color, isSpecial)
+    local btnContainer = Instance.new("Frame", parent)
+    btnContainer.Size = UDim2.new(1, -24, 0, 32)
+    btnContainer.Position = UDim2.new(0, 12, 0, yPos)
+    btnContainer.BackgroundTransparency = 1
+    
+    local btn = Instance.new("TextButton", btnContainer)
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundColor3 = color or THEME.surfaceLight
+    btn.BorderSizePixel = 0
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    
+    local btnCorner = Instance.new("UICorner", btn)
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    
+    local btnStroke = Instance.new("UIStroke", btn)
+    btnStroke.Color = THEME.stroke
+    btnStroke.Thickness = 1
+    btnStroke.Transparency = 0.5
+    
+    local label = Instance.new("TextLabel", btn)
+    label.Size = UDim2.new(1, -16, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.TextColor3 = THEME.text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local status = Instance.new("TextLabel", btn)
+    status.Size = UDim2.new(0, 50, 1, 0)
+    status.Position = UDim2.new(1, -58, 0, 0)
+    status.BackgroundTransparency = 1
+    status.Text = "OFF"
+    status.Font = Enum.Font.GothamBold
+    status.TextSize = 10
+    status.TextColor3 = THEME.textDim
+    status.TextXAlignment = Enum.TextXAlignment.Right
+    
+    -- Hover effect
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {
+            BackgroundColor3 = color and Color3.fromRGB(
+                math.min(255, color.R * 255 + 20),
+                math.min(255, color.G * 255 + 20),
+                math.min(255, color.B * 255 + 20)
+            ) or THEME.surface
+        }):Play()
+        TweenService:Create(btnStroke, TweenInfo.new(0.2), {Transparency = 0.2}):Play()
+    end)
+    
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = color or THEME.surfaceLight}):Play()
+        TweenService:Create(btnStroke, TweenInfo.new(0.2), {Transparency = 0.5}):Play()
+    end)
+    
+    return btn, status, label
+end
+
+-- Create Buttons in 2 columns
+-- Left column
+local autoPathBtn, autoPathStatus = createButton(content, "🎯 AUTO PATH", 10, THEME.primary)
+autoPathBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+autoPathBtn.Parent.Position = UDim2.new(0, 12, 0, 10)
+
+local fixatedBtn, fixatedStatus = createButton(content, "📍 FIXATED PATH", 48, THEME.surfaceLight)
+fixatedBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+fixatedBtn.Parent.Position = UDim2.new(0, 12, 0, 48)
+
+local autoLagBtn, autoLagStatus = createButton(content, "🔥 AUTO LAG", 86, THEME.primary)
+autoLagBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+autoLagBtn.Parent.Position = UDim2.new(0, 12, 0, 86)
+
+-- Right column
+local cashBtn, cashStatus = createButton(content, "💰 AUTO CASH", 10, THEME.surfaceLight)
+cashBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+cashBtn.Parent.Position = UDim2.new(0.52, 0, 0, 10)
+
+local changePathBtn, changePathStatus = createButton(content, "🔄 CHANGE PATH", 48, Color3.fromRGB(255, 140, 0))
+changePathBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+changePathBtn.Parent.Position = UDim2.new(0.52, 0, 0, 48)
+
+local stopBtn, stopStatus = createButton(content, "⛔ STOP ALL", 86, THEME.danger)
+stopBtn.Parent.Size = UDim2.new(0.48, 0, 0, 32)
+stopBtn.Parent.Position = UDim2.new(0.52, 0, 0, 86)
+
+-- Hide cash button
+cashBtn.Visible = false
+cashBtn.Active = false
+
+-- Update Change Path status to show current path
+changePathStatus.Text = "Path " .. currentPath
+changePathStatus.TextColor3 = THEME.accent
+
+-- Sliders
+local function createSlider(parent, labelText, yPos, minVal, maxVal, defaultVal, color, callback)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(1, -24, 0, 42)
+    container.Position = UDim2.new(0, 12, 0, yPos)
+    container.BackgroundTransparency = 1
+    
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(1, 0, 0, 18)
+    label.BackgroundTransparency = 1
+    label.Text = labelText .. ": " .. defaultVal
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 11
+    label.TextColor3 = THEME.text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local track = Instance.new("Frame", container)
+    track.Size = UDim2.new(1, 0, 0, 6)
+    track.Position = UDim2.new(0, 0, 0, 22)
+    track.BackgroundColor3 = THEME.surface
+    track.BorderSizePixel = 0
+    
+    local trackCorner = Instance.new("UICorner", track)
+    trackCorner.CornerRadius = UDim.new(1, 0)
+    
+    local fill = Instance.new("Frame", track)
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = color
+    fill.BorderSizePixel = 0
+    
+    local fillCorner = Instance.new("UICorner", fill)
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    
+    local thumb = Instance.new("Frame", track)
+    thumb.Size = UDim2.new(0, 14, 0, 14)
+    thumb.Position = UDim2.new((defaultVal - minVal) / (maxVal - minVal), -7, 0.5, -7)
+    thumb.BackgroundColor3 = color
+    thumb.BorderSizePixel = 0
+    
+    local thumbCorner = Instance.new("UICorner", thumb)
+    thumbCorner.CornerRadius = UDim.new(1, 0)
+    
+    local thumbStroke = Instance.new("UIStroke", thumb)
+    thumbStroke.Color = THEME.text
+    thumbStroke.Thickness = 2
+    
+    local dragging = false
+    local function update(x)
+        local pct = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local value = math.floor(minVal + pct * (maxVal - minVal))
+        fill.Size = UDim2.new(pct, 0, 1, 0)
+        thumb.Position = UDim2.new(pct, -7, 0.5, -7)
+        label.Text = labelText .. ": " .. value
+        if callback then callback(value) end
+        return value
+    end
+    
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            update(input.Position.X)
+        end
+    end)
+    
+    UIS.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            update(input.Position.X)
+        end
+    end)
+    
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    return label, update
+end
+
+-- Sliders in 2 columns
+local speedSlider = Instance.new("Frame", content)
+speedSlider.Size = UDim2.new(0.48, 0, 0, 42)
+speedSlider.Position = UDim2.new(0, 12, 0, 128)
+speedSlider.BackgroundTransparency = 1
+
+local speedLabel = createSlider(speedSlider, "⚡ Speed", 0, 10, 350, WALK_SPEED, THEME.accent, function(val)
+    WALK_SPEED = val
+end)
+speedSlider:GetChildren()[1].Parent = speedSlider
+
+local spacingSlider = Instance.new("Frame", content)
+spacingSlider.Size = UDim2.new(0.48, 0, 0, 42)
+spacingSlider.Position = UDim2.new(0.52, 0, 0, 128)
+spacingSlider.BackgroundTransparency = 1
+
+local spacingLabel = createSlider(spacingSlider, "📏 Path Spacing", 0, 1, 10, WAYPOINT_SPACING, THEME.warning, function(val)
+    WAYPOINT_SPACING = val
+end)
+spacingSlider:GetChildren()[1].Parent = spacingSlider
+
+-- Lag size slider (full width)
+local lagSizeLabel = createSlider(content, "💾 Lag Data Size", 178, 1000, 30000, dataSize, THEME.danger, function(val)
+    dataSize = math.floor(val / 1000) * 1000
+end)
+
+-- Status Display
+local statusContainer = Instance.new("Frame", content)
+statusContainer.Size = UDim2.new(1, -24, 0, 50)
+statusContainer.Position = UDim2.new(0, 12, 0, 228)
+statusContainer.BackgroundColor3 = THEME.surface
+statusContainer.BorderSizePixel = 0
+
+local statusCorner = Instance.new("UICorner", statusContainer)
+statusCorner.CornerRadius = UDim.new(0, 8)
+
+local proximityLabel = Instance.new("TextLabel", statusContainer)
+proximityLabel.Size = UDim2.new(1, -16, 0, 18)
+proximityLabel.Position = UDim2.new(0, 8, 0, 6)
+proximityLabel.BackgroundTransparency = 1
+proximityLabel.Text = "📊 Proximity: 0%"
+proximityLabel.Font = Enum.Font.GothamBold
+proximityLabel.TextSize = 11
+proximityLabel.TextColor3 = THEME.accent
+proximityLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local lagLabel = Instance.new("TextLabel", statusContainer)
+lagLabel.Size = UDim2.new(1, -16, 0, 18)
+lagLabel.Position = UDim2.new(0, 8, 0, 26)
+lagLabel.BackgroundTransparency = 1
+lagLabel.Text = "⚙️ Lag: Idle"
+lagLabel.Font = Enum.Font.Gotham
+lagLabel.TextSize = 10
+lagLabel.TextColor3 = THEME.textDim
+lagLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+
+
+-- Mode Selection Popup
+local modePopup = Instance.new("Frame", gui)
+modePopup.Size = UDim2.new(0, 260, 0, 320)
+modePopup.Position = UDim2.new(0.5, -130, 0.5, -160)
+modePopup.BackgroundColor3 = THEME.bg
+modePopup.BorderSizePixel = 0
+modePopup.Visible = false
+modePopup.ZIndex = 100
+
+local popupCorner = Instance.new("UICorner", modePopup)
+popupCorner.CornerRadius = UDim.new(0, 16)
+
+local popupStroke = Instance.new("UIStroke", modePopup)
+popupStroke.Color = THEME.primary
+popupStroke.Thickness = 2
+
+local popupTitle = Instance.new("TextLabel", modePopup)
+popupTitle.Size = UDim2.new(1, -20, 0, 40)
+popupTitle.Position = UDim2.new(0, 10, 0, 10)
+popupTitle.BackgroundTransparency = 1
+popupTitle.Text = "Select Path Mode"
+popupTitle.Font = Enum.Font.GothamBold
+popupTitle.TextSize = 16
+popupTitle.TextColor3 = THEME.text
+popupTitle.ZIndex = 101
+
+local modeLabel = Instance.new("TextLabel", modePopup)
+modeLabel.Size = UDim2.new(1, -20, 0, 20)
+modeLabel.Position = UDim2.new(0, 10, 0, 50)
+modeLabel.BackgroundTransparency = 1
+modeLabel.Text = "Selected: None"
+modeLabel.Font = Enum.Font.Gotham
+modeLabel.TextSize = 12
+modeLabel.TextColor3 = THEME.accent
+modeLabel.ZIndex = 101
+
+local function createModeButton(text, yPos, modeName)
+    local btn, status = createButton(modePopup, text, yPos, THEME.surfaceLight)
+    btn.ZIndex = 101
+    status.Parent.ZIndex = 101
+    
+    btn.MouseButton1Click:Connect(function()
+        selectedMode = modeName
+        modeLabel.Text = "Selected: " .. text
+        autoPathEnabled = true
+        autoPathStatus.Text = "ON"
+        autoPathStatus.TextColor3 = THEME.success
+        
+        -- Visual feedback
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.success}):Play()
+        wait(0.3)
+        modePopup.Visible = false
+    end)
+    
+    return btn
+end
+
+createModeButton("Direct Move", 80, "direct")
+createModeButton("Path Move", 120, "path")
+createModeButton("Smart Path", 160, "smart")
+createModeButton("Fixated Path", 200, "fixated")
+
+local closePopupBtn, _ = createButton(modePopup, "✖ Close", 250, THEME.danger)
+closePopupBtn.ZIndex = 101
+closePopupBtn.MouseButton1Click:Connect(function()
+    modePopup.Visible = false
+end)
+
+-- Entrance Animation
+mainFrame.Position = UDim2.new(0.5, -210, -0.5, 0)
+mainFrame.Size = UDim2.new(0, 0, 0, 0)
+
+TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0.5, -210, 0.5, -180),
+    Size = UDim2.new(0, 420, 0, 360)
+}):Play()
+
+-- Pathfinding Functions
+local function computePath()
+    if not targetPoint then return end
+    local char, hrp = getChar()
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 6,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        WaypointSpacing = WAYPOINT_SPACING
+    })
+    path:ComputeAsync(hrp.Position, targetPoint)
+    if path.Status == Enum.PathStatus.Success then
+        waypoints = path:GetWaypoints()
+        wpIndex = 1
+        visualizePath()
+    end
+end
+
+local function computeFixatedPath()
+    if not fixatedWaypoints or #fixatedWaypoints == 0 then return end
+    if fixatedIndex > #fixatedWaypoints then return end
+    local char, hrp = getChar()
+    local currentGoal = fixatedWaypoints[fixatedIndex]
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 6,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        WaypointSpacing = WAYPOINT_SPACING
+    })
+    path:ComputeAsync(hrp.Position, currentGoal)
+    if path.Status == Enum.PathStatus.Success then
+        waypoints = path:GetWaypoints()
+        wpIndex = 1
+        visualizePath()
+    end
+end
+
+local function stopMovement()
+    if moveConn then moveConn:Disconnect() moveConn = nil end
+    mode = nil
+    waypoints = nil
+    wpIndex = 1
+    clearMarker()
+    clearPathVisuals()
+    fixatedIndex = 1
+    
+    fixatedStatus.Text = "OFF"
+    fixatedStatus.TextColor3 = THEME.textDim
+    cashStatus.Text = "OFF"
+    cashStatus.TextColor3 = THEME.textDim
+end
+
+local function startMovement(newMode)
+    stopMovement()
+    mode = newMode
+    local char, hrp, hum = getChar()
+    lastPos = hrp.Position
+    stuckTimer = 0
+
+    moveConn = RunService.Heartbeat:Connect(function(dt)
+        if mode == "fixated" then
+            if not waypoints or wpIndex > #waypoints then
+                local currentGoal = fixatedWaypoints[fixatedIndex]
+                local flatDist = Vector3.new(hrp.Position.X - currentGoal.X, 0, hrp.Position.Z - currentGoal.Z).Magnitude
+                
+                -- If we're close to the current fixated waypoint, move to the next one
+                if flatDist < STOP_DISTANCE * 2 then
+                    fixatedIndex += 1
+                    if fixatedIndex > #fixatedWaypoints then
+                        stopMovement()
+                        return
+                    else
+                        print("Moving to fixated waypoint " .. fixatedIndex)
+                        -- Reset waypoints and recompute to next goal
+                        waypoints = nil
+                        wpIndex = 1
+                        computeFixatedPath()
+                        return
+                    end
+                else
+                    -- We have no path and we're not at the goal, compute path
+                    if not waypoints then
+                        computeFixatedPath()
+                        return
+                    end
+                end
+            end
+            
+            if waypoints and waypoints[wpIndex] then
+                local goal = waypoints[wpIndex].Position
+                if waypoints[wpIndex].Action == Enum.PathWaypointAction.Jump then
+                    hum.Jump = true
+                end
+                
+                local distToWaypoint = (Vector3.new(hrp.Position.X, goal.Y, hrp.Position.Z) - Vector3.new(goal.X, goal.Y, goal.Z)).Magnitude
+                if distToWaypoint < 1.5 then
+                    wpIndex += 1
+                end
+                
+                local offset = goal - hrp.Position
+                local dir = offset.Unit
+                local desired = Vector3.new(dir.X * WALK_SPEED, hrp.Velocity.Y, dir.Z * WALK_SPEED)
+                hrp.Velocity = hrp.Velocity:Lerp(desired, LERP_ALPHA)
+                
+                local moved = (hrp.Position - lastPos).Magnitude
+                if moved < STUCK_DISTANCE then
+                    stuckTimer += dt
+                    if stuckTimer > STUCK_TIME then
+                        print("Stuck, recomputing...")
+                        waypoints = nil
+                        wpIndex = 1
+                        computeFixatedPath()
+                        stuckTimer = 0
+                    end
+                else
+                    stuckTimer = 0
+                end
+                lastPos = hrp.Position
+            end
+            return
+        end
+        
+        if not targetPoint then stopMovement() return end
+        local goal = targetPoint
+        
+        if mode ~= "direct" and waypoints and waypoints[wpIndex] then
+            goal = waypoints[wpIndex].Position
+            if waypoints[wpIndex].Action == Enum.PathWaypointAction.Jump then
+                hum.Jump = true
+            end
+            
+            local distToWaypoint = (Vector3.new(hrp.Position.X, goal.Y, hrp.Position.Z) - Vector3.new(goal.X, goal.Y, goal.Z)).Magnitude
+            if distToWaypoint < 1.5 then
+                wpIndex += 1
+                if wpIndex > #waypoints then
+                    stopMovement()
+                    return
+                end
+            end
+        end
+
+        local offset = goal - hrp.Position
+        local flatDistance = Vector3.new(offset.X, 0, offset.Z).Magnitude
+        
+        if flatDistance < STOP_DISTANCE then
+            if mode == "direct" or (waypoints and wpIndex > #waypoints) then
+                stopMovement()
+                return
+            end
+        end
+
+        local dir = offset.Unit
+        local desired = Vector3.new(dir.X * WALK_SPEED, hrp.Velocity.Y, dir.Z * WALK_SPEED)
+        hrp.Velocity = hrp.Velocity:Lerp(desired, LERP_ALPHA)
+
+        if mode ~= "direct" then
+            local moved = (hrp.Position - lastPos).Magnitude
+            if moved < STUCK_DISTANCE then
+                stuckTimer += dt
+                if stuckTimer > STUCK_TIME then
+                    computePath()
+                    stuckTimer = 0
+                end
+            else
+                stuckTimer = 0
+            end
+            lastPos = hrp.Position
+        end
+    end)
+end
+
+-- Button Handlers
+autoPathBtn.MouseButton1Click:Connect(function()
+    modePopup.Visible = true
+end)
+
+fixatedBtn.MouseButton1Click:Connect(function()
+    if mode == "fixated" then
+        stopMovement()
+    else
+        fixatedStatus.Text = "ON"
+        fixatedStatus.TextColor3 = THEME.success
+        fixatedIndex = 1
+        computeFixatedPath()
+        startMovement("fixated")
+    end
+end)
+
+cashBtn.MouseButton1Click:Connect(function()
+    local cashPos = findCashInBase()
+    if cashPos then
+        targetPoint = cashPos
+        createMarker(targetPoint, true)
+        cashStatus.Text = "FOUND"
+        cashStatus.TextColor3 = THEME.success
+        task.delay(1, function()
+            cashStatus.Text = "OFF"
+            cashStatus.TextColor3 = THEME.textDim
+        end)
+    end
+end)
+
+changePathBtn.MouseButton1Click:Connect(function()
+    -- Toggle between path 1 and 2
+    if currentPath == 1 then
+        currentPath = 2
+    else
+        currentPath = 1
+    end
+    
+    -- Update button status
+    changePathStatus.Text = "Path " .. currentPath
+    
+    -- Recreate waypoints with new path
+    createFixatedWaypoints()
+    
+    -- If currently running fixated path, restart with new path
+    if mode == "fixated" then
+        fixatedIndex = 1
+        waypoints = nil
+        wpIndex = 1
+        computeFixatedPath()
+    end
+    
+    -- Visual feedback
+    TweenService:Create(changePathBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = THEME.success
+    }):Play()
+    task.wait(0.3)
+    TweenService:Create(changePathBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+    }):Play()
+    
+    print("Switched to Path " .. currentPath)
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+    stopMovement()
+    lagModeEnabled = false
+    autoLagEnabled = false
+    autoLagStatus.Text = "OFF"
+    autoLagStatus.TextColor3 = THEME.textDim
+    selectedMode = nil
+    autoPathEnabled = false
+    autoPathStatus.Text = "OFF"
+    autoPathStatus.TextColor3 = THEME.textDim
+end)
+
+autoLagBtn.MouseButton1Click:Connect(function()
+    autoLagEnabled = not autoLagEnabled
+    if autoLagEnabled then
+        autoLagStatus.Text = "ON"
+        autoLagStatus.TextColor3 = THEME.success
+        lagLabel.Text = "⚙️ Lag: Monitoring..."
+        lagLabel.TextColor3 = THEME.warning
+    else
+        autoLagStatus.Text = "OFF"
+        autoLagStatus.TextColor3 = THEME.textDim
+        lagLabel.Text = "⚙️ Lag: Idle"
+        lagLabel.TextColor3 = THEME.textDim
+    end
+end)
+
+-- Lag Loop
+RunService.Heartbeat:Connect(function()
+    if lagModeEnabled and remoteEventTarget then
+        local dataPayload = string.rep("z", dataSize)
+        remoteEventTarget:FireServer(uniqueIdentifier, dataPayload)
+    end
+end)
+
+-- Proximity Tracking
+local hasTriggered = false
+local hasTriggeredLag = false
+
+ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
+    activePrompt = prompt
+    startTime = tick()
+    hasTriggered = false
+    hasTriggeredLag = false
+    
+    promptConnection = RunService.RenderStepped:Connect(function()
+        if not activePrompt then
+            proximityLabel.Text = "📊 Proximity: 0%"
+            return
+        end
+        
+        local holdDuration = activePrompt.HoldDuration
+        if holdDuration <= 0 then return end
+        
+        local elapsed = tick() - startTime
+        local percent = math.clamp((elapsed / holdDuration) * 100, 0, 100)
+        
+        proximityLabel.Text = string.format("📊 Proximity: %.0f%%", percent)
+        if percent < 50 then
+            proximityLabel.TextColor3 = THEME.danger
+        elseif percent < 85 then
+            proximityLabel.TextColor3 = THEME.warning
+        else
+            proximityLabel.TextColor3 = THEME.success
+        end
+        
+        if percent >= 85 and autoLagEnabled and not hasTriggeredLag then
+            hasTriggeredLag = true
+            lagModeEnabled = true
+            lagLabel.Text = "⚙️ Lag: ACTIVE ⚡"
+            lagLabel.TextColor3 = THEME.primary
+        end
+        
+        if percent >= 89 and autoPathEnabled and selectedMode and not hasTriggered then
+            hasTriggered = true
+            if selectedMode == "direct" then
+                if targetPoint then startMovement("direct") end
+            elseif selectedMode == "path" then
+                if targetPoint then computePath(); startMovement("path") end
+            elseif selectedMode == "smart" then
+                if targetPoint then computePath(); startMovement("smart") end
+            elseif selectedMode == "fixated" then
+                fixatedIndex = 1; computeFixatedPath(); startMovement("fixated")
+            end
+        end
+    end)
+end)
+
+ProximityPromptService.PromptButtonHoldEnded:Connect(function()
+    activePrompt = nil
+    hasTriggered = false
+    hasTriggeredLag = false
+    proximityLabel.Text = "📊 Proximity: 0%"
+    proximityLabel.TextColor3 = THEME.accent
+    
+    if promptConnection then
+        promptConnection:Disconnect()
+        promptConnection = nil
+    end
+end)
+
+print("✨ Instant TP loaded successfully!")
